@@ -1,0 +1,171 @@
+syntax = "proto3";
+
+package admin;
+
+option go_package = "./adminpb";
+
+service ProxyAdmin {
+    // backends
+    rpc GetBackends(Empty) returns (GetBackendsResponse);
+    rpc GetBackend(GetBackendRequest) returns (BackendResponse);
+    rpc AddBackend(AddBackendRequest) returns (BasicResponse);
+    rpc RemoveBackend(RemoveBackendRequest) returns (BasicResponse);
+    rpc UpdateBackend(UpdateBackendRequest) returns (BasicResponse);
+
+    // virtual hosts
+    rpc GetVirtualHosts(Empty) returns (GetVirtualHostsResponse);
+    rpc GetVirtualHost(GetVirtualHostRequest) returns (VirtualHost);
+    rpc AddVirtualHost(AddVirtualHostRequest) returns (BasicResponse);
+    rpc RemoveVirtualHost(RemoveVirtualHostRequest) returns (BasicResponse);
+    rpc UpdateVirtualHost(UpdateVirtualHostRequest) returns (BasicResponse);
+
+    rpc GetVirtualHostSecurityConfig(GetVirtualHostRequest) returns (SecurityConfigResponse);
+    rpc UpdateVirtualHostSecurityConfig(UpdateSecurityConfigRequest) returns (BasicResponse);
+
+    // global
+    rpc GetGlobalConfig(Empty) returns (GlobalConfig);
+    rpc SetGlobalConfig(GlobalConfig) returns (BasicResponse);
+
+    // metrics
+    rpc GetMetrics(Empty) returns (MetricsResponse);
+}
+
+message Empty {}
+
+message BasicResponse {
+    bool success = 1;
+    string message = 2;
+    string error = 3;
+}
+
+// ================= BACKENDS =================
+
+message Backend {
+    string url = 1;
+    int32 weight = 2;
+    bool enabled = 3;
+}
+
+message BackendResponse {
+    string url = 1;
+    int32 weight = 2;
+    bool enabled = 3;
+    bool active = 4;
+    uint32 error_count = 5;
+    string last_error = 6;
+}
+
+message GetBackendsResponse {
+    repeated BackendResponse backends = 1;
+}
+
+message GetBackendRequest {
+    string url = 1;
+}
+
+message AddBackendRequest {
+    string url = 1;
+    int32 weight = 2;
+}
+
+message RemoveBackendRequest {
+    string url = 1;
+}
+
+message UpdateBackendRequest {
+    string url = 1;
+    int32 weight = 2;
+    bool enabled = 3;
+}
+
+// ================= METRICS =================
+
+message MetricsResponse {
+    uint64 total_requests = 1;
+    uint64 failed_requests = 2;
+    double avg_latency_ms = 3;
+
+    map<string, uint64> requests_per_backend = 4;
+    map<string, uint64> failed_per_backend = 5;
+    map<string, double> avg_latency_per_backend = 6;
+    map<string, uint64> active_connections = 7;
+    map<string, uint64> timeouts_per_backend = 8;
+    map<string, uint64> health_checks_per_backend = 9;
+    map<string, uint64> failed_health_checks = 10;
+
+    uint64 rate_limit_blocked = 11;
+    uint64 rate_limit_allowed = 12;
+
+    map<int32, uint64> status_codes = 13;
+    map<string, uint64> methods_count = 14;
+
+    uint64 request_size_total = 15;
+    uint64 response_size_total = 16;
+
+    uint64 goroutines = 17;
+    float memory_percent = 18;
+    float cpu_percent = 19;
+    string uptime = 20;
+}
+
+// ================= GLOBAL =================
+
+message GlobalConfig {
+    int32 proxy_port = 1;
+    string lb_strategy = 2;
+}
+
+// ================= SECURITY =================
+
+message SecurityConfigResponse {
+    RateLimitingConfig rate_limiting = 1;
+}
+
+message UpdateSecurityConfigRequest {
+    string domain = 1;
+    SecurityConfigResponse config = 2;
+}
+
+message RateLimitingConfig {
+    bool enabled = 1;
+    int32 rate_per_ip = 2;
+    int32 burst = 3;
+    int32 window_sec = 4;
+}
+
+// ================= VIRTUAL HOSTS =================
+
+message GetVirtualHostsResponse {
+    repeated VirtualHost virtual_hosts = 1;
+}
+
+message GetVirtualHostRequest {
+    string domain = 1;
+}
+
+message PathRoute {
+    string path = 1;
+    repeated string backends = 2;
+    bool strip_prefix = 3;
+    string rewrite = 4;
+}
+
+message VirtualHost {
+    string domain = 1;
+    repeated string backends = 2;
+    repeated PathRoute path_routes = 3;
+    SecurityConfigResponse security_config = 4;
+}
+
+message AddVirtualHostRequest {
+    VirtualHost vhost = 1;
+}
+
+message RemoveVirtualHostRequest {
+    string domain = 1;
+}
+
+message UpdateVirtualHostRequest {
+    string domain = 1;
+    VirtualHost vhost = 2;
+}

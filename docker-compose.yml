@@ -1,0 +1,71 @@
+services:
+  reverse-proxy:
+    build:
+      context: .
+      dockerfile: deploy/docker/reverse-proxy.dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend-a
+      - backend-b
+    environment:
+      - BACKEND1_URL=http://backend-a:3000
+      - BACKEND2_URL=http://backend-b:3000
+      - ADMIN_GRPC_ADDR=0.0.0.0:50051
+    networks:
+      - proxy-net
+
+  admin-api:
+    build:
+      context: .
+      dockerfile: deploy/docker/admin-api.dockerfile
+    ports:
+      - "127.0.0.1:8081:8081"
+    environment:
+      - PROXY_ADDR=reverse-proxy:50051
+    depends_on:
+      - reverse-proxy
+    networks:
+      - proxy-net
+
+  backend-a:
+    build:
+      context: .
+      dockerfile: deploy/docker/mock-server1.dockerfile
+    networks:
+      - proxy-net
+
+  backend-b:
+    build:
+      context: .
+      dockerfile: deploy/docker/mock-server2.dockerfile
+    networks:
+      - proxy-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - proxy-net
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_PASSWORD:-change-me-before-sharing}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+
+volumes:
+  grafana_data:

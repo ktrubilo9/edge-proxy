@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+!.env.example
+bin/
+build/
+coverage/
+dist/
+tmp/
+temp/
+ReverseProxy/
+reverse-proxy-system/

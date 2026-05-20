@@ -1,0 +1,41 @@
+{
+  "proxy_port": 8080,
+  "lb_strategy": "least-connections",
+  "backends": [
+    { "url": "env:APP_WEB_1_URL", "weight": 1, "enabled": true },
+    { "url": "env:APP_WEB_2_URL", "weight": 1, "enabled": true }
+  ],
+  "health_check": {
+    "path": "/health",
+    "interval_seconds": 3,
+    "timeout_seconds": 1,
+    "healthy_threshold": 2,
+    "success_codes": [200]
+  },
+  "timeouts": {
+    "connect_timeout_ms": 5000,
+    "response_timeout_ms": 30000,
+    "keep_alive_timeout_ms": 30000,
+    "idle_conn_timeout_ms": 90000
+  },
+  "logging": {
+    "enabled": true,
+    "level": "info",
+    "async": true,
+    "buffer_size": 65536
+  },
+  "virtual_hosts": [
+    {
+      "domain": "app.example.local",
+      "backends": ["env:APP_WEB_1_URL", "env:APP_WEB_2_URL"],
+      "security": {
+        "rate_limiting": {
+          "enabled": false,
+          "rate_per_ip": 100,
+          "burst": 50,
+          "window_sec": 60
+        }
+      }
+    }
+  ]
+}
