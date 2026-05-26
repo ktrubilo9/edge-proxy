@@ -1,6 +1,7 @@
 package main
 
 import (
+	"edge-proxy/internal/admin"
 	"edge-proxy/internal/admin/handler"
 	"edge-proxy/internal/api/adminpb"
 	"log"
@@ -16,6 +17,19 @@ func main() {
 	proxyAddr := os.Getenv("PROXY_ADDR")
 	if proxyAddr == "" {
 		proxyAddr = "reverse-proxy:50051"
+	}
+
+	apiAuthStatusEnv := os.Getenv("ADMIN_AUTH_ENABLED")
+	var authEnabled bool = false
+	if apiAuthStatusEnv == "true" {
+		authEnabled = true
+	}
+
+	adminToken := os.Getenv("ADMIN_API_TOKEN")
+	if adminToken == "" {
+		if authEnabled {
+			log.Fatalf("Admin token is not set in environment")
+		}
 	}
 
 	conn, err := grpc.NewClient(proxyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -48,7 +62,8 @@ func main() {
 	mux.HandleFunc("GET /api/config/lb", handler.HandleGlobalConfig(proxyClient))
 	mux.HandleFunc("PUT /api/config/lb", handler.HandleGlobalConfig(proxyClient))
 
-	handlerWithCORS := corsMiddleware(mux)
+	handlerWithAuth := admin.NewAuthMiddleware(authEnabled, adminToken, mux)
+	handlerWithCORS := corsMiddleware(handlerWithAuth)
 
 	srv := &http.Server{
 		Addr:         ":8081",
