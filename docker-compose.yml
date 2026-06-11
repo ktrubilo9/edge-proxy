@@ -12,6 +12,9 @@ services:
       - BACKEND1_URL=http://backend-a:3000
       - BACKEND2_URL=http://backend-b:3000
       - ADMIN_GRPC_ADDR=0.0.0.0:50051
+      - ADMIN_GRPC_TOKEN=${ADMIN_GRPC_TOKEN:?ADMIN_GRPC_TOKEN must be set}
+      - OPS_ADDR=0.0.0.0:9091
+      - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-}
     networks:
       - proxy-net
 
@@ -23,6 +26,10 @@ services:
       - "127.0.0.1:8081:8081"
     environment:
       - PROXY_ADDR=reverse-proxy:50051
+      - ADMIN_AUTH_ENABLED=${ADMIN_AUTH_ENABLED:-true}
+      - ADMIN_API_TOKEN=${ADMIN_API_TOKEN:?ADMIN_API_TOKEN must be set}
+      - ADMIN_GRPC_TOKEN=${ADMIN_GRPC_TOKEN:?ADMIN_GRPC_TOKEN must be set}
+      - ADMIN_ALLOWED_ORIGIN=${ADMIN_ALLOWED_ORIGIN:-http://localhost:3000}
     depends_on:
       - reverse-proxy
     networks:

@@ -10,7 +10,7 @@ The project is intentionally scoped as an engineering/learning system, not as a 
 - Path-based routing with optional prefix stripping.
 - Least-connections load balancing.
 - Backend health checks with active/inactive status tracking.
-- Runtime configuration updates through an admin HTTP API backed by gRPC.
+- Authenticated runtime configuration updates through an admin HTTP API backed by gRPC.
 - Per-virtual-host rate limiting.
 - Request IDs and forwarded headers for better traceability.
 - Prometheus metrics endpoint and provisioned Grafana dashboard.
@@ -27,7 +27,10 @@ This repository demonstrates a complete but deliberately compact proxy system:
 - Prometheus metrics and a provisioned Grafana dashboard;
 - Docker Compose infrastructure for local development and demos.
 
-It does not currently include production-grade concerns such as TLS termination, authentication and authorization for the admin API, distributed configuration storage, hot reload across multiple proxy instances, advanced load-balancing policies, WAF rules, or service discovery.
+It does not currently include production-grade concerns such as TLS termination,
+fine-grained admin authorization, encrypted or mutually authenticated gRPC,
+distributed configuration storage, hot reload across multiple proxy instances,
+advanced load-balancing policies, WAF rules, or service discovery.
 
 ## Architecture
 
@@ -88,13 +91,15 @@ curl -H "Host: app.example.local" http://localhost:8080/
 
 Backends are marked active by the health checker. Immediately after startup, the proxy may briefly return `503` until the first health check succeeds.
 
-Health and metrics endpoints:
+The public proxy port exposes only a minimal health response:
 
 ```bash
 curl http://localhost:8080/health
-curl http://localhost:8080/metrics
-curl http://localhost:8080/metrics/prometheus
 ```
+
+Detailed health and metrics endpoints listen on the internal operational address
+`reverse-proxy:9091` in Docker Compose. The port is not published to the host;
+Prometheus scrapes `/metrics/prometheus` over the Compose network.
 
 ## Configuration
 
@@ -145,7 +150,20 @@ Example virtual host:
 
 ## Admin API
 
-The admin API listens on `:8081` in Docker Compose and communicates with the proxy through the internal gRPC admin server.
+The admin API listens on `:8081` in Docker Compose and communicates with the
+proxy through a token-authenticated internal gRPC control plane. The current
+gRPC transport is not encrypted and must remain on a trusted private network.
+Copy `.env.example`
+to `.env` and replace both example tokens before starting the stack:
+
+```dotenv
+ADMIN_AUTH_ENABLED=true
+ADMIN_API_TOKEN=replace-with-a-random-value
+ADMIN_GRPC_TOKEN=replace-with-another-random-value
+```
+
+Authentication is enabled by default. Set `ADMIN_AUTH_ENABLED=false` only for
+isolated local development. The gRPC token is always required.
 
 Available HTTP routes:
 
@@ -172,13 +190,15 @@ PUT    /api/config/lb
 Example:
 
 ```bash
-curl http://localhost:8081/api/backend
+curl http://localhost:8081/api/backend \
+  -H "Authorization: Bearer $ADMIN_API_TOKEN"
 ```
 
 Add a backend:
 
 ```bash
 curl -X POST http://localhost:8081/api/backend \
+  -H "Authorization: Bearer $ADMIN_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"url":"http://backend-c:3000","weight":1}'
 ```
@@ -187,6 +207,7 @@ Add a virtual host:
 
 ```bash
 curl -X POST http://localhost:8081/api/vhost \
+  -H "Authorization: Bearer $ADMIN_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "vhost": {
@@ -209,12 +230,16 @@ curl -X POST http://localhost:8081/api/vhost \
 Prometheus scrapes the proxy from:
 
 ```text
-http://reverse-proxy:8080/metrics/prometheus
+http://reverse-proxy:9091/metrics/prometheus
 ```
 
 Grafana is provisioned with a datasource and dashboard from `deploy/grafana/`. The default local admin password is configured through `GF_PASSWORD` in `.env`.
 
 The proxy exports its own HTTP, backend, rate-limit, and resource metrics. Backend CPU and memory panels are populated when upstream services expose the demo `/admin/metrics` endpoint; the included mock backends do this.
+
+When the proxy runs behind another reverse proxy, configure
+`TRUSTED_PROXY_CIDRS` with only that proxy's network ranges. Forwarded client IP
+headers are ignored for all other peers.
 
 ## Development
 

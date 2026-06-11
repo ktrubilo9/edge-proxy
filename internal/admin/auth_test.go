@@ -101,6 +101,9 @@ func TestNewAuthMiddleware(t *testing.T) {
 			if nextCalled != tt.wantNextCalled {
 				t.Fatalf("nextCalled = %v, want %v", nextCalled, tt.wantNextCalled)
 			}
+			if tt.wantStatusCode == http.StatusUnauthorized && rec.Header().Get("WWW-Authenticate") == "" {
+				t.Fatal("missing WWW-Authenticate header")
+			}
 		})
 	}
 }

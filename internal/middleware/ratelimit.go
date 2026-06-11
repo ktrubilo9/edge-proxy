@@ -4,7 +4,6 @@ import (
 	"edge-proxy/internal/logger"
 	"edge-proxy/internal/proxy/runtime"
 	"edge-proxy/internal/ratelimit"
-	"net"
 	"net/http"
 
 	"strconv"
@@ -16,13 +15,18 @@ import (
 type RateLimitMiddleware struct {
 	state        *runtime.Runtime
 	rateLimiters map[string]*ratelimit.RateLimiter
+	clientIPs    *ClientIPResolver
 	mu           sync.RWMutex
 }
 
-func NewRateLimitMiddleware(state *runtime.Runtime) *RateLimitMiddleware {
+func NewRateLimitMiddleware(state *runtime.Runtime, clientIPs *ClientIPResolver) *RateLimitMiddleware {
+	if clientIPs == nil {
+		clientIPs, _ = NewClientIPResolver("")
+	}
 	return &RateLimitMiddleware{
 		state:        state,
 		rateLimiters: make(map[string]*ratelimit.RateLimiter),
+		clientIPs:    clientIPs,
 	}
 }
 
@@ -63,7 +67,7 @@ func (rl *RateLimitMiddleware) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		clientIP := getRealIP(r)
+		clientIP := rl.clientIPs.Resolve(r)
 
 		host := r.Host
 		if strings.Contains(host, ":") {
@@ -83,19 +87,6 @@ func (rl *RateLimitMiddleware) Middleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-func getRealIP(r *http.Request) string {
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		parts := strings.Split(forwarded, ",")
-		return strings.TrimSpace(parts[0])
-	}
-
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return ip
 }
 
 func (rl *RateLimitMiddleware) CleanupExpiredLimiters(cleanupInterval time.Duration) {

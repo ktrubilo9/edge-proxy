@@ -14,5 +14,5 @@ WORKDIR /app
 COPY --from=build /app/reverse-proxy .
 COPY --from=build /app/config.json .
 
-EXPOSE 8080 50051
+EXPOSE 8080 50051 9091
 CMD ["./reverse-proxy"]
