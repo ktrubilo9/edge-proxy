@@ -13,11 +13,13 @@ func NewAuthMiddleware(enabled bool, token string, next http.Handler) http.Handl
 			return
 		}
 		if token == "" {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="admin-api"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		parts := strings.Fields(r.Header.Get("Authorization"))
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || subtle.ConstantTimeCompare([]byte(token), []byte(parts[1])) == 0 {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="admin-api"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}

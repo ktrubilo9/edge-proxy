@@ -8,6 +8,25 @@ import (
 	"net/http"
 )
 
+func PublicHealthHandler(rt *runtime.Runtime) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		status := "healthy"
+		statusCode := http.StatusOK
+		if activeBackendCount(rt) == 0 {
+			status = "unhealthy"
+			statusCode = http.StatusServiceUnavailable
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": status}); err != nil {
+			logger.Error("Failed to encode public health response", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
+	}
+}
+
 func HealthHandler(rt *runtime.Runtime) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger.Debug("Health endpoint accessed", map[string]interface{}{
@@ -51,6 +70,7 @@ func HealthHandler(rt *runtime.Runtime) http.HandlerFunc {
 			Backends:    backendStatuses,
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		if activeCount == 0 {
 			response.Status = "unhealthy"
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -66,7 +86,6 @@ func HealthHandler(rt *runtime.Runtime) http.HandlerFunc {
 			})
 		}
 
-		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			logger.Error("Failed to encode health response", map[string]interface{}{
 				"error": err.Error(),
@@ -74,4 +93,14 @@ func HealthHandler(rt *runtime.Runtime) http.HandlerFunc {
 			http.Error(w, "Failed to encode health response", http.StatusInternalServerError)
 		}
 	}
+}
+
+func activeBackendCount(rt *runtime.Runtime) int {
+	activeCount := 0
+	for _, backend := range rt.GetBackends() {
+		if backend.Enabled && backend.Active {
+			activeCount++
+		}
+	}
+	return activeCount
 }

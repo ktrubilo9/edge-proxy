@@ -1,9 +1,11 @@
 package grpc
 
 import (
+	"edge-proxy/internal/admin"
 	"edge-proxy/internal/api/adminpb"
 	"edge-proxy/internal/logger"
 	"edge-proxy/internal/proxy/runtime"
+	"errors"
 	"net"
 	"os"
 
@@ -16,6 +18,10 @@ func NewAdminGRPCServer(rt *runtime.Runtime) (*grpc.Server, net.Listener, error)
 	addr := os.Getenv("ADMIN_GRPC_ADDR")
 	if addr == "" {
 		addr = DefaultAdminAddr
+	}
+	token := os.Getenv("ADMIN_GRPC_TOKEN")
+	if token == "" {
+		return nil, nil, errors.New("ADMIN_GRPC_TOKEN is required")
 	}
 
 	logger.Info("Starting Admin gRPC server", map[string]interface{}{
@@ -31,7 +37,9 @@ func NewAdminGRPCServer(rt *runtime.Runtime) (*grpc.Server, net.Listener, error)
 		return nil, nil, err
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(admin.NewGRPCAuthServerInterceptor(token)),
+	)
 	adminpb.RegisterProxyAdminServer(grpcServer, &AdminGRPCServer{Runtime: rt})
 
 	return grpcServer, lis, nil
