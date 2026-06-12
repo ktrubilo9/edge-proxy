@@ -56,7 +56,8 @@ func newHealthTestChecker(t *testing.T, threshold int32) (*HealthChecker, *confi
 	if err != nil {
 		t.Fatalf("create runtime: %v", err)
 	}
-	status, ok := rt.BackendStatus(backend.URL)
+	current := rt.State()
+	status, ok := current.BackendStatus(backend.URL)
 	if !ok {
 		t.Fatal("missing backend status")
 	}

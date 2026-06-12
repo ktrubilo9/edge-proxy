@@ -20,10 +20,14 @@ func (t *closeTrackingTransport) CloseIdleConnections() {
 }
 
 func TestBuildRuntimeStateInitializesComponents(t *testing.T) {
-	rt := &Runtime{Metrics: metrics.NewMetrics()}
+	rt := &Runtime{
+		Metrics:  metrics.NewMetrics(),
+		statuses: NewBackendRegistry(),
+	}
 	snapshot := runtimeTestSnapshot(defaultRuntimeTestTimeouts(), "least-connections", "http://backend-1")
 
-	state := rt.buildRuntimeState(nil, snapshot)
+	statuses := rt.statuses.Reconcile(snapshot.Raw.Backends)
+	state := rt.buildRuntimeState(nil, snapshot, statuses)
 
 	if state.Snapshot != snapshot {
 		t.Fatal("runtime state does not contain the supplied snapshot")
@@ -37,12 +41,17 @@ func TestBuildRuntimeStateInitializesComponents(t *testing.T) {
 }
 
 func TestBuildRuntimeStateReusesComponentsForRoutingChange(t *testing.T) {
-	rt := &Runtime{Metrics: metrics.NewMetrics()}
+	rt := &Runtime{
+		Metrics:  metrics.NewMetrics(),
+		statuses: NewBackendRegistry(),
+	}
 	initialSnapshot := runtimeTestSnapshot(defaultRuntimeTestTimeouts(), "least-connections", "http://backend-1")
-	initial := rt.buildRuntimeState(nil, initialSnapshot)
+	statuses := rt.statuses.Reconcile(initialSnapshot.Raw.Backends)
+	initial := rt.buildRuntimeState(nil, initialSnapshot, statuses)
 
 	nextSnapshot := runtimeTestSnapshot(defaultRuntimeTestTimeouts(), "least-connections", "http://backend-2")
-	next := rt.buildRuntimeState(initial, nextSnapshot)
+	statuses = rt.statuses.Reconcile(nextSnapshot.Raw.Backends)
+	next := rt.buildRuntimeState(initial, nextSnapshot, statuses)
 
 	if next == initial {
 		t.Fatal("runtime state was not replaced")
@@ -53,17 +62,29 @@ func TestBuildRuntimeStateReusesComponentsForRoutingChange(t *testing.T) {
 	if next.LoadBalancer != initial.LoadBalancer {
 		t.Fatal("load balancer was replaced even though its strategy did not change")
 	}
+	if _, ok := next.BackendStatus("http://backend-2"); !ok {
+		t.Fatal("next state does not contain the new backend status")
+	}
+	if _, ok := next.BackendStatus("http://backend-1"); ok {
+		t.Fatal("next state still contains the removed backend status")
+	}
 }
 
 func TestBuildRuntimeStateReplacesHTTPClientWhenTimeoutsChange(t *testing.T) {
-	rt := &Runtime{Metrics: metrics.NewMetrics()}
+	rt := &Runtime{
+		Metrics:  metrics.NewMetrics(),
+		statuses: NewBackendRegistry(),
+	}
 	initialSnapshot := runtimeTestSnapshot(defaultRuntimeTestTimeouts(), "least-connections", "http://backend-1")
-	initial := rt.buildRuntimeState(nil, initialSnapshot)
+	statuses := rt.statuses.Reconcile(initialSnapshot.Raw.Backends)
+	initial := rt.buildRuntimeState(nil, initialSnapshot, statuses)
 
 	updatedTimeouts := defaultRuntimeTestTimeouts()
 	updatedTimeouts.ResponseTimeoutMs++
 	nextSnapshot := runtimeTestSnapshot(updatedTimeouts, "least-connections", "http://backend-1")
-	next := rt.buildRuntimeState(initial, nextSnapshot)
+
+	statuses = rt.statuses.Reconcile(nextSnapshot.Raw.Backends)
+	next := rt.buildRuntimeState(initial, nextSnapshot, statuses)
 
 	if next.HTTPClient == initial.HTTPClient {
 		t.Fatal("HTTP client was reused after timeout configuration changed")

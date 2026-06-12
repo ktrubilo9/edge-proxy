@@ -32,11 +32,12 @@ func newTestRuntime(t *testing.T, fullConfig *config.FullConfig) *runtime.Runtim
 	if err != nil {
 		t.Fatalf("create runtime: %v", err)
 	}
+	current := rt.State()
 	for _, backend := range fullConfig.Backends {
 		if backend == nil {
 			continue
 		}
-		status, ok := rt.BackendStatus(backend.URL)
+		status, ok := current.BackendStatus(backend.URL)
 		if !ok {
 			t.Fatalf("missing backend status for %s", backend.URL)
 		}
@@ -93,7 +94,8 @@ func TestProxyHandlerUnknownHostReturnsForbidden(t *testing.T) {
 		nil,
 	)
 
-	status, ok := rt.BackendStatus("http://127.0.0.1:1")
+	current := rt.State()
+	status, ok := current.BackendStatus("http://127.0.0.1:1")
 	if !ok {
 		t.Fatal("missing backend status")
 	}

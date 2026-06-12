@@ -13,7 +13,7 @@ import (
 func TestApplyUpdatePublishesBackendChangesAtomically(t *testing.T) {
 	rt := newRuntimeUpdateTestInstance(t)
 	previous := rt.State()
-	previousStatus, ok := rt.BackendStatus("http://backend-1")
+	previousStatus, ok := previous.BackendStatus("http://backend-1")
 	if !ok {
 		t.Fatal("missing initial backend status")
 	}
@@ -43,11 +43,11 @@ func TestApplyUpdatePublishesBackendChangesAtomically(t *testing.T) {
 	if rt.Metrics.Backends.Get(addedURL) == nil {
 		t.Fatal("new backend metrics were not registered")
 	}
-	if _, ok := rt.BackendStatus(addedURL); !ok {
+	if _, ok := current.BackendStatus(addedURL); !ok {
 		t.Fatal("new backend status was not registered")
 	}
 
-	currentStatus, ok := rt.BackendStatus("http://backend-1")
+	currentStatus, ok := current.BackendStatus("http://backend-1")
 	if !ok || currentStatus != previousStatus {
 		t.Fatal("existing backend status was not preserved")
 	}
@@ -61,7 +61,8 @@ func TestApplyUpdatePublishesBackendChangesAtomically(t *testing.T) {
 	if rt.Metrics.Backends.Get(addedURL) != nil {
 		t.Fatal("removed backend metrics are still registered")
 	}
-	if _, ok := rt.BackendStatus(addedURL); ok {
+	current = rt.State()
+	if _, ok := current.BackendStatus(addedURL); ok {
 		t.Fatal("removed backend status is still registered")
 	}
 }
@@ -85,6 +86,44 @@ func TestApplyUpdateFailureLeavesRuntimeStateUntouched(t *testing.T) {
 	}
 	if rt.Metrics.Backends.Get("http://backend-1") != previousMetrics {
 		t.Fatal("failed update replaced backend metrics")
+	}
+}
+
+func TestOldRuntimeStateRetainsRemovedBackendStatus(t *testing.T) {
+	rt := newRuntimeUpdateTestInstance(t)
+	oldState := rt.State()
+	oldStatus, ok := oldState.BackendStatus("http://backend-1")
+	if !ok {
+		t.Fatal("old state is missing the initial backend status")
+	}
+
+	if err := rt.AddBackend(config.BackendConfig{
+		URL:     "http://backend-2",
+		Weight:  1,
+		Enabled: true,
+	}); err != nil {
+		t.Fatalf("add replacement backend: %v", err)
+	}
+	if err := rt.UpdateVirtualHost("app.local", config.VirtualHost{
+		Backends: []string{"http://backend-2"},
+		Security: &config.SecurityConfig{},
+	}); err != nil {
+		t.Fatalf("switch virtual host to replacement backend: %v", err)
+	}
+	if err := rt.RemoveBackend("http://backend-1"); err != nil {
+		t.Fatalf("remove initial backend: %v", err)
+	}
+
+	if _, ok := rt.State().BackendStatus("http://backend-1"); ok {
+		t.Fatal("new state contains the removed backend status")
+	}
+
+	retained, ok := oldState.BackendStatus("http://backend-1")
+	if !ok {
+		t.Fatal("old state lost the removed backend status")
+	}
+	if retained != oldStatus {
+		t.Fatal("old state changed its backend status reference")
 	}
 }
 
@@ -128,7 +167,7 @@ func TestApplyUpdateSerializesConcurrentBackendChanges(t *testing.T) {
 		if rt.Metrics.Backends.Get(url) == nil {
 			t.Fatalf("metrics are missing %s", url)
 		}
-		if _, ok := rt.BackendStatus(url); !ok {
+		if _, ok := state.BackendStatus(url); !ok {
 			t.Fatalf("status registry is missing %s", url)
 		}
 	}

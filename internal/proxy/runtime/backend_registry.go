@@ -28,9 +28,9 @@ func (br *BackendRegistry) Get(url string) (*BackendStatus, bool) {
 	return status, ok
 }
 
-func (br *BackendRegistry) Reconcile(backends []*config.BackendConfig) {
+func (br *BackendRegistry) Reconcile(backends []*config.BackendConfig) map[string]*BackendStatus {
 	if br == nil {
-		return
+		return nil
 	}
 
 	br.mu.Lock()
@@ -51,4 +51,5 @@ func (br *BackendRegistry) Reconcile(backends []*config.BackendConfig) {
 	}
 
 	br.statuses = next
+	return next
 }

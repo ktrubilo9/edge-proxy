@@ -17,6 +17,8 @@ type RuntimeState struct {
 	Snapshot     *config.Snapshot
 	HTTPClient   *http.Client
 	LoadBalancer lb.LoadBalancer
+
+	backendStatuses map[string]*BackendStatus
 }
 
 type Runtime struct {
@@ -73,13 +75,77 @@ func NewRuntime(configPath string) (*Runtime, error) {
 		rt.Metrics.Backends.Register(b.URL)
 	}
 
-	rt.statuses.Reconcile(snapshot.Raw.Backends)
-	rt.state.Store(rt.buildRuntimeState(nil, snapshot))
+	statuses := rt.statuses.Reconcile(snapshot.Raw.Backends)
+	initial := rt.buildRuntimeState(nil, snapshot, statuses)
+
+	rt.state.Store(initial)
 
 	return rt, nil
 }
 
-func (rt *Runtime) buildRuntimeState(previous *RuntimeState, snapshot *config.Snapshot) *RuntimeState {
+func (state *RuntimeState) BackendStatus(url string) (*BackendStatus, bool) {
+	if state == nil {
+		return nil, false
+	}
+
+	status, ok := state.backendStatuses[url]
+	return status, ok
+}
+
+func (state *RuntimeState) Backends() []config.BackendResponse {
+	if state == nil || state.Snapshot == nil || state.Snapshot.Raw == nil {
+		return nil
+	}
+
+	backends := state.Snapshot.Raw.Backends
+	resp := make([]config.BackendResponse, 0, len(backends))
+	for _, backend := range backends {
+		if backend == nil {
+			continue
+		}
+
+		item := config.BackendResponse{
+			URL:     backend.URL,
+			Weight:  backend.Weight,
+			Enabled: backend.Enabled,
+		}
+		if status, ok := state.BackendStatus(backend.URL); ok {
+			item.Active = status.Active.Load()
+			item.ErrorCount = status.ErrorCount.Load()
+			item.LastError = status.GetLastError()
+		}
+
+		resp = append(resp, item)
+	}
+
+	return resp
+}
+
+func (state *RuntimeState) Backend(url string) *config.BackendResponse {
+	if state == nil || state.Snapshot == nil {
+		return nil
+	}
+
+	backend := state.Snapshot.BackendsByURL[url]
+	if backend == nil {
+		return nil
+	}
+
+	resp := &config.BackendResponse{
+		URL:     backend.URL,
+		Weight:  backend.Weight,
+		Enabled: backend.Enabled,
+	}
+	if status, ok := state.BackendStatus(url); ok {
+		resp.Active = status.Active.Load()
+		resp.ErrorCount = status.ErrorCount.Load()
+		resp.LastError = status.GetLastError()
+	}
+
+	return resp
+}
+
+func (rt *Runtime) buildRuntimeState(previous *RuntimeState, snapshot *config.Snapshot, statuses map[string]*BackendStatus) *RuntimeState {
 	var client *http.Client
 	var balancer lb.LoadBalancer
 
@@ -106,9 +172,10 @@ func (rt *Runtime) buildRuntimeState(previous *RuntimeState, snapshot *config.Sn
 	}
 
 	return &RuntimeState{
-		Snapshot:     snapshot,
-		HTTPClient:   client,
-		LoadBalancer: balancer,
+		Snapshot:        snapshot,
+		HTTPClient:      client,
+		LoadBalancer:    balancer,
+		backendStatuses: statuses,
 	}
 }
 
@@ -156,12 +223,14 @@ func (rt *Runtime) applyUpdate(mutate func() error) error {
 
 	snapshot := rt.Config.Snapshot()
 	previous := rt.State()
-	next := rt.buildRuntimeState(previous, snapshot)
+
+	statuses := rt.statuses.Reconcile(snapshot.Raw.Backends)
+	next := rt.buildRuntimeState(previous, snapshot, statuses)
 
 	rt.registerBackendMetrics(snapshot)
-	rt.statuses.Reconcile(snapshot.Raw.Backends)
 
 	published := rt.state.Swap(next)
+
 	rt.deregisterRemovedBackendMetrics(published, next)
 	closeReplacedHTTPClient(published, next)
 
@@ -215,10 +284,6 @@ func (rt *Runtime) State() *RuntimeState {
 	return rt.state.Load()
 }
 
-func (rt *Runtime) BackendStatus(url string) (*BackendStatus, bool) {
-	return rt.statuses.Get(url)
-}
-
 func (rt *Runtime) AddBackend(backend config.BackendConfig) error {
 	return rt.applyUpdate(func() error {
 		return rt.Config.AddBackend(backend)
@@ -238,50 +303,11 @@ func (rt *Runtime) UpdateBackend(url string, weight int32, enabled bool) error {
 }
 
 func (rt *Runtime) GetBackends() []config.BackendResponse {
-	backends := rt.State().Snapshot.Raw.Backends
-	resp := make([]config.BackendResponse, 0, len(backends))
-	for _, backend := range backends {
-		if backend == nil {
-			continue
-		}
-
-		item := config.BackendResponse{
-			URL:     backend.URL,
-			Weight:  backend.Weight,
-			Enabled: backend.Enabled,
-		}
-
-		if status, ok := rt.BackendStatus(backend.URL); ok {
-			item.Active = status.Active.Load()
-			item.ErrorCount = status.ErrorCount.Load()
-			item.LastError = status.GetLastError()
-		}
-
-		resp = append(resp, item)
-	}
-
-	return resp
+	return rt.State().Backends()
 }
 
 func (rt *Runtime) GetBackend(url string) *config.BackendResponse {
-	backend := rt.State().Snapshot.BackendsByURL[url]
-	if backend == nil {
-		return nil
-	}
-
-	resp := &config.BackendResponse{
-		URL:     backend.URL,
-		Weight:  backend.Weight,
-		Enabled: backend.Enabled,
-	}
-
-	if status, ok := rt.BackendStatus(url); ok {
-		resp.Active = status.Active.Load()
-		resp.ErrorCount = status.ErrorCount.Load()
-		resp.LastError = status.GetLastError()
-	}
-
-	return resp
+	return rt.State().Backend(url)
 }
 
 func (rt *Runtime) UpdateGlobalConfig(proxyPort int32, strategy string) error {

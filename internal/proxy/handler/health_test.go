@@ -69,7 +69,8 @@ func TestPublicHealthHandlerReportsUnavailable(t *testing.T) {
 			IdleConnTimeoutMs:  1000,
 		},
 	})
-	status, ok := rt.BackendStatus(backendURL)
+	current := rt.State()
+	status, ok := current.BackendStatus(backendURL)
 	if !ok {
 		t.Fatal("missing backend status")
 	}

@@ -93,7 +93,7 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 			if b == nil || !b.Enabled {
 				continue
 			}
-			if status, ok := state.BackendStatus(b.URL); ok && status.Active.Load() {
+			if status, ok := current.BackendStatus(b.URL); ok && status.Active.Load() {
 				backends = append(backends, b)
 			}
 		}
