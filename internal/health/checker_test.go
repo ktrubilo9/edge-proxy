@@ -2,14 +2,15 @@ package health
 
 import (
 	"edge-proxy/internal/config"
-	"edge-proxy/internal/lb"
-	"edge-proxy/internal/metrics"
 	"edge-proxy/internal/proxy/runtime"
-	"net/http"
+	"encoding/json"
+	"os"
 	"testing"
 )
 
-func newHealthTestChecker(threshold int32) (*HealthChecker, *config.BackendConfig, *runtime.BackendStatus) {
+func newHealthTestChecker(t *testing.T, threshold int32) (*HealthChecker, *config.BackendConfig, *runtime.BackendStatus) {
+	t.Helper()
+
 	backend := &config.BackendConfig{
 		URL:     "http://backend-1",
 		Weight:  1,
@@ -35,25 +36,37 @@ func newHealthTestChecker(threshold int32) (*HealthChecker, *config.BackendConfi
 		},
 	}
 
-	m := metrics.NewMetrics()
-	m.Backends.Register(backend.URL)
-
-	rt := &runtime.Runtime{
-		Snapshot:      config.BuildSnapshot(fullConfig),
-		Metrics:       m,
-		BackendStatus: map[string]*runtime.BackendStatus{backend.URL: {}},
-		HTTPClient:    &http.Client{},
+	configData, err := json.Marshal(fullConfig)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
 	}
-	rt.LoadBalancer = lb.GetLoadBalancer("least-connections", m)
+	configFile, err := os.CreateTemp(t.TempDir(), "config-*.json")
+	if err != nil {
+		t.Fatalf("create config file: %v", err)
+	}
+	if _, err := configFile.Write(configData); err != nil {
+		_ = configFile.Close()
+		t.Fatalf("write config: %v", err)
+	}
+	if err := configFile.Close(); err != nil {
+		t.Fatalf("close config file: %v", err)
+	}
 
-	status := rt.BackendStatus[backend.URL]
+	rt, err := runtime.NewRuntime(configFile.Name())
+	if err != nil {
+		t.Fatalf("create runtime: %v", err)
+	}
+	status, ok := rt.BackendStatus(backend.URL)
+	if !ok {
+		t.Fatal("missing backend status")
+	}
 	status.Active.Store(true)
 
 	return NewHealthChecker(rt, &fullConfig.HealthCheck), backend, status
 }
 
 func TestUpdateBackendStatusHonorsHealthyThreshold(t *testing.T) {
-	checker, backend, status := newHealthTestChecker(2)
+	checker, backend, status := newHealthTestChecker(t, 2)
 
 	status.ErrorCount.Store(1)
 	checker.UpdateBackendStatus(backend, false)
@@ -69,7 +82,7 @@ func TestUpdateBackendStatusHonorsHealthyThreshold(t *testing.T) {
 }
 
 func TestUpdateBackendStatusReactivatesHealthyBackend(t *testing.T) {
-	checker, backend, status := newHealthTestChecker(3)
+	checker, backend, status := newHealthTestChecker(t, 3)
 
 	status.Active.Store(false)
 	status.ErrorCount.Store(0)

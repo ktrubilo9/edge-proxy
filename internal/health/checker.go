@@ -70,8 +70,8 @@ func (hc *HealthChecker) checkBackends() {
 }
 
 func (hc *HealthChecker) CheckBackend(b *config.BackendConfig) {
-	status := hc.state.BackendStatus[b.URL]
-	if status == nil {
+	status, ok := hc.state.BackendStatus(b.URL)
+	if !ok {
 		return
 	}
 	healthy := hc.PerformHealthCheck(b)
@@ -148,8 +148,8 @@ func (hc *HealthChecker) PerformHealthCheck(b *config.BackendConfig) bool {
 		return false
 	}
 
-	status := hc.state.BackendStatus[b.URL]
-	if status == nil {
+	status, ok := hc.state.BackendStatus(b.URL)
+	if !ok {
 		return false
 	}
 	status.ErrorCount.Store(0)
@@ -170,8 +170,8 @@ func (hc *HealthChecker) isSuccessCode(statusCode int32) bool {
 }
 
 func (hc *HealthChecker) recordError(b *config.BackendConfig, errMsg string) {
-	status := hc.state.BackendStatus[b.URL]
-	if status == nil {
+	status, ok := hc.state.BackendStatus(b.URL)
+	if !ok {
 		return
 	}
 	status.ErrorCount.Add(1)
@@ -179,8 +179,8 @@ func (hc *HealthChecker) recordError(b *config.BackendConfig, errMsg string) {
 }
 
 func (hc *HealthChecker) UpdateBackendStatus(b *config.BackendConfig, healthy bool) {
-	status := hc.state.BackendStatus[b.URL]
-	if status == nil {
+	status, ok := hc.state.BackendStatus(b.URL)
+	if !ok {
 		return
 	}
 	healthConfig := hc.state.SnapshotView().Raw.HealthCheck

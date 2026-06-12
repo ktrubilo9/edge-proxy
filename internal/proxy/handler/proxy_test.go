@@ -2,46 +2,53 @@ package handler
 
 import (
 	"edge-proxy/internal/config"
-	"edge-proxy/internal/lb"
-	"edge-proxy/internal/metrics"
 	"edge-proxy/internal/proxy/runtime"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"sync/atomic"
 )
 
-func newTestRuntime(fullConfig *config.FullConfig) *runtime.Runtime {
-	m := metrics.NewMetrics()
-	for _, backend := range fullConfig.Backends {
-		if backend != nil {
-			m.Backends.Register(backend.URL)
-		}
+func newTestRuntime(t *testing.T, fullConfig *config.FullConfig) *runtime.Runtime {
+	t.Helper()
+
+	configData, err := json.Marshal(fullConfig)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
 	}
 
-	rt := &runtime.Runtime{
-		Snapshot:      config.BuildSnapshot(fullConfig),
-		Metrics:       m,
-		BackendStatus: map[string]*runtime.BackendStatus{},
-		HTTPClient:    &http.Client{},
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(configPath, configData, 0600); err != nil {
+		t.Fatalf("write config: %v", err)
 	}
 
+	rt, err := runtime.NewRuntime(configPath)
+	if err != nil {
+		t.Fatalf("create runtime: %v", err)
+	}
 	for _, backend := range fullConfig.Backends {
 		if backend == nil {
 			continue
 		}
-		rt.BackendStatus[backend.URL] = &runtime.BackendStatus{}
-		rt.BackendStatus[backend.URL].Active.Store(true)
+		status, ok := rt.BackendStatus(backend.URL)
+		if !ok {
+			t.Fatalf("missing backend status for %s", backend.URL)
+		}
+		status.Active.Store(true)
 	}
-	rt.LoadBalancer = lb.GetLoadBalancer("least-connections", m)
 
 	return rt
 }
 
-func newSingleRouteTestRuntime(host string, backendURL string, route *config.PathRoute) *runtime.Runtime {
+func newSingleRouteTestRuntime(t *testing.T, host string, backendURL string, route *config.PathRoute) *runtime.Runtime {
+	t.Helper()
+
 	fullConfig := &config.FullConfig{
 		ProxyPort:  8080,
 		LBStrategy: "least-connections",
@@ -75,18 +82,22 @@ func newSingleRouteTestRuntime(host string, backendURL string, route *config.Pat
 			},
 		},
 	}
-	return newTestRuntime(fullConfig)
+	return newTestRuntime(t, fullConfig)
 }
 
 func TestProxyHandlerUnknownHostReturnsForbidden(t *testing.T) {
-	rt := &runtime.Runtime{
-		Snapshot: &config.Snapshot{
-			Raw: &config.FullConfig{},
-		},
-		Metrics:       metrics.NewMetrics(),
-		BackendStatus: map[string]*runtime.BackendStatus{},
-		HTTPClient:    &http.Client{},
+	rt := newSingleRouteTestRuntime(
+		t,
+		"configured.local",
+		"http://127.0.0.1:1",
+		nil,
+	)
+
+	status, ok := rt.BackendStatus("http://127.0.0.1:1")
+	if !ok {
+		t.Fatal("missing backend status")
 	}
+	status.Active.Store(false)
 
 	req := httptest.NewRequest(http.MethodGet, "http://unknown.local/", nil)
 	req.Host = "unknown.local"
@@ -109,7 +120,7 @@ func TestProxyHandlerRoutesRequestToBackend(t *testing.T) {
 	}))
 	defer backend.Close()
 
-	rt := newSingleRouteTestRuntime("app.local", backend.URL, nil)
+	rt := newSingleRouteTestRuntime(t, "app.local", backend.URL, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "http://app.local/", nil)
 	req.Host = "app.local"
@@ -155,7 +166,7 @@ func TestProxyHandlerUsesPathRouteBackends(t *testing.T) {
 		Backends: []string{apiBackend.URL},
 	}
 
-	rt := newSingleRouteTestRuntime("app.local", apiBackend.URL, route)
+	rt := newSingleRouteTestRuntime(t, "app.local", apiBackend.URL, route)
 
 	req := httptest.NewRequest(http.MethodGet, "http://app.local/api/users", nil)
 	req.Host = "app.local"
@@ -187,7 +198,7 @@ func TestProxyHandlerStripsPathPrefixBeforeForwarding(t *testing.T) {
 		StripPrefix: true,
 	}
 
-	rt := newSingleRouteTestRuntime("app.local", backend.URL, route)
+	rt := newSingleRouteTestRuntime(t, "app.local", backend.URL, route)
 
 	req := httptest.NewRequest(http.MethodGet, "http://app.local/api/users", nil)
 	req.Host = "app.local"
@@ -249,7 +260,7 @@ func TestProxyHandlerPrefersLongestMatchingPathRoute(t *testing.T) {
 		},
 	}
 
-	rt := newTestRuntime(fullConfig)
+	rt := newTestRuntime(t, fullConfig)
 
 	req := httptest.NewRequest(http.MethodGet, "http://app.local/api/v1/users", nil)
 	req.Host = "app.local"
@@ -276,7 +287,7 @@ func TestProxyHandlerPreservesIncomingRequestID(t *testing.T) {
 	}))
 	defer backend.Close()
 
-	rt := newSingleRouteTestRuntime("app.local", backend.URL, nil)
+	rt := newSingleRouteTestRuntime(t, "app.local", backend.URL, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "http://app.local/", nil)
 	req.Host = "app.local"
@@ -332,7 +343,7 @@ func TestProxyHandlerRetriesIdempotentRequestOnAlternateBackend(t *testing.T) {
 		},
 	}
 
-	rt := newTestRuntime(fullConfig)
+	rt := newTestRuntime(t, fullConfig)
 
 	req := httptest.NewRequest(http.MethodGet, "http://app.local/", nil)
 	req.Host = "app.local"

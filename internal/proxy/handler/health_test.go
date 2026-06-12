@@ -2,8 +2,6 @@ package handler
 
 import (
 	"edge-proxy/internal/config"
-	"edge-proxy/internal/metrics"
-	"edge-proxy/internal/proxy/runtime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,18 +10,26 @@ import (
 
 func TestPublicHealthHandlerDoesNotExposeBackendDetails(t *testing.T) {
 	backendURL := "http://backend.internal:3000"
-	rt := &runtime.Runtime{
-		Snapshot: config.BuildSnapshot(&config.FullConfig{
-			Backends: []*config.BackendConfig{
-				{URL: backendURL, Enabled: true},
-			},
-		}),
-		BackendStatus: map[string]*runtime.BackendStatus{
-			backendURL: {},
+	rt := newTestRuntime(t, &config.FullConfig{
+		ProxyPort:  8080,
+		LBStrategy: "least-connections",
+		Backends: []*config.BackendConfig{
+			{URL: backendURL, Weight: 1, Enabled: true},
 		},
-		Metrics: metrics.NewMetrics(),
-	}
-	rt.BackendStatus[backendURL].Active.Store(true)
+		HealthCheck: config.HealthCheckConfig{
+			Path:             "/health",
+			IntervalSeconds:  1,
+			TimeoutSeconds:   1,
+			HealthyThreshold: 1,
+			SuccessCodes:     []int32{200},
+		},
+		Timeouts: config.TimeoutsConfig{
+			ConnectTimeoutMs:   1000,
+			ResponseTimeoutMs:  1000,
+			KeepAliveTimeoutMs: 1000,
+			IdleConnTimeoutMs:  1000,
+		},
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "http://app.local/health", nil)
 	rec := httptest.NewRecorder()
@@ -42,11 +48,32 @@ func TestPublicHealthHandlerDoesNotExposeBackendDetails(t *testing.T) {
 }
 
 func TestPublicHealthHandlerReportsUnavailable(t *testing.T) {
-	rt := &runtime.Runtime{
-		Snapshot:      config.BuildSnapshot(&config.FullConfig{}),
-		BackendStatus: map[string]*runtime.BackendStatus{},
-		Metrics:       metrics.NewMetrics(),
+	backendURL := "http://backend.internal:3000"
+	rt := newTestRuntime(t, &config.FullConfig{
+		ProxyPort:  8080,
+		LBStrategy: "least-connections",
+		Backends: []*config.BackendConfig{
+			{URL: backendURL, Weight: 1, Enabled: true},
+		},
+		HealthCheck: config.HealthCheckConfig{
+			Path:             "/health",
+			IntervalSeconds:  1,
+			TimeoutSeconds:   1,
+			HealthyThreshold: 1,
+			SuccessCodes:     []int32{200},
+		},
+		Timeouts: config.TimeoutsConfig{
+			ConnectTimeoutMs:   1000,
+			ResponseTimeoutMs:  1000,
+			KeepAliveTimeoutMs: 1000,
+			IdleConnTimeoutMs:  1000,
+		},
+	})
+	status, ok := rt.BackendStatus(backendURL)
+	if !ok {
+		t.Fatal("missing backend status")
 	}
+	status.Active.Store(false)
 
 	req := httptest.NewRequest(http.MethodGet, "http://app.local/health", nil)
 	rec := httptest.NewRecorder()
