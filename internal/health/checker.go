@@ -60,24 +60,31 @@ func (hc *HealthChecker) Stop() {
 }
 
 func (hc *HealthChecker) checkBackends() {
-	backends := hc.state.SnapshotView().Raw.Backends
+	current := hc.state.State()
+	backends := current.Snapshot.Raw.Backends
 	for _, b := range backends {
 		if b == nil || !b.Enabled {
 			continue
 		}
-		hc.CheckBackend(b)
+		hc.checkBackend(current, b)
 	}
 }
 
 func (hc *HealthChecker) CheckBackend(b *config.BackendConfig) {
-	status := hc.state.BackendStatus[b.URL]
-	if status == nil {
+	current := hc.state.State()
+	hc.checkBackend(current, b)
+}
+
+func (hc *HealthChecker) checkBackend(current *runtime.RuntimeState, b *config.BackendConfig) {
+	status, ok := current.BackendStatus(b.URL)
+	if !ok {
 		return
 	}
-	healthy := hc.PerformHealthCheck(b)
+	healthConfig := current.Snapshot.Raw.HealthCheck
+	healthy := hc.performHealthCheck(b, status, healthConfig)
 	oldActive := status.Active.Load()
 
-	hc.UpdateBackendStatus(b, healthy)
+	updateBackendStatus(status, healthy, healthConfig)
 	newActive := status.Active.Load()
 
 	if oldActive != newActive {
@@ -104,7 +111,20 @@ func (hc *HealthChecker) CheckBackend(b *config.BackendConfig) {
 }
 
 func (hc *HealthChecker) PerformHealthCheck(b *config.BackendConfig) bool {
-	healthConfig := hc.state.SnapshotView().Raw.HealthCheck
+	current := hc.state.State()
+	status, ok := current.BackendStatus(b.URL)
+	if !ok {
+		return false
+	}
+
+	return hc.performHealthCheck(b, status, current.Snapshot.Raw.HealthCheck)
+}
+
+func (hc *HealthChecker) performHealthCheck(
+	b *config.BackendConfig,
+	status *runtime.BackendStatus,
+	healthConfig config.HealthCheckConfig,
+) bool {
 	url := b.URL + healthConfig.Path
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(healthConfig.TimeoutSeconds)*time.Second)
@@ -113,7 +133,7 @@ func (hc *HealthChecker) PerformHealthCheck(b *config.BackendConfig) bool {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	metrics := hc.state.Metrics
 	if err != nil {
-		hc.recordError(b, fmt.Sprintf("Failed to create request: %v", err))
+		recordError(status, fmt.Sprintf("Failed to create request: %v", err))
 		metrics.RecordHealthCheck(b.URL, false)
 		logger.Debug("Health check request creation failed", map[string]interface{}{
 			"backend": b.URL,
@@ -126,7 +146,7 @@ func (hc *HealthChecker) PerformHealthCheck(b *config.BackendConfig) bool {
 	resp, err := hc.client.Do(req)
 	duration := time.Since(start)
 	if err != nil {
-		hc.recordError(b, fmt.Sprintf("Health check failed: %v", err))
+		recordError(status, fmt.Sprintf("Health check failed: %v", err))
 		metrics.RecordHealthCheck(b.URL, false)
 		logger.Warn("Health check failed", map[string]interface{}{
 			"backend":  b.URL,
@@ -137,8 +157,8 @@ func (hc *HealthChecker) PerformHealthCheck(b *config.BackendConfig) bool {
 	}
 	defer resp.Body.Close()
 
-	if !hc.isSuccessCode(int32(resp.StatusCode)) {
-		hc.recordError(b, fmt.Sprintf("Unsuccessful status code: %d", resp.StatusCode))
+	if !isSuccessCode(healthConfig, int32(resp.StatusCode)) {
+		recordError(status, fmt.Sprintf("Unsuccessful status code: %d", resp.StatusCode))
 		metrics.RecordHealthCheck(b.URL, false)
 		logger.Warn("Health check returned non-success status", map[string]interface{}{
 			"backend":     b.URL,
@@ -148,10 +168,6 @@ func (hc *HealthChecker) PerformHealthCheck(b *config.BackendConfig) bool {
 		return false
 	}
 
-	status := hc.state.BackendStatus[b.URL]
-	if status == nil {
-		return false
-	}
 	status.ErrorCount.Store(0)
 	metrics.RecordHealthCheck(b.URL, true)
 	status.SetLastError("")
@@ -159,8 +175,7 @@ func (hc *HealthChecker) PerformHealthCheck(b *config.BackendConfig) bool {
 	return true
 }
 
-func (hc *HealthChecker) isSuccessCode(statusCode int32) bool {
-	healthConfig := hc.state.SnapshotView().Raw.HealthCheck
+func isSuccessCode(healthConfig config.HealthCheckConfig, statusCode int32) bool {
 	for _, code := range healthConfig.SuccessCodes {
 		if statusCode == code {
 			return true
@@ -169,21 +184,26 @@ func (hc *HealthChecker) isSuccessCode(statusCode int32) bool {
 	return false
 }
 
-func (hc *HealthChecker) recordError(b *config.BackendConfig, errMsg string) {
-	status := hc.state.BackendStatus[b.URL]
-	if status == nil {
-		return
-	}
+func recordError(status *runtime.BackendStatus, errMsg string) {
 	status.ErrorCount.Add(1)
 	status.SetLastError(errMsg)
 }
 
 func (hc *HealthChecker) UpdateBackendStatus(b *config.BackendConfig, healthy bool) {
-	status := hc.state.BackendStatus[b.URL]
-	if status == nil {
+	current := hc.state.State()
+	status, ok := current.BackendStatus(b.URL)
+	if !ok {
 		return
 	}
-	healthConfig := hc.state.SnapshotView().Raw.HealthCheck
+
+	updateBackendStatus(status, healthy, current.Snapshot.Raw.HealthCheck)
+}
+
+func updateBackendStatus(
+	status *runtime.BackendStatus,
+	healthy bool,
+	healthConfig config.HealthCheckConfig,
+) {
 	currentErrorCount := status.ErrorCount.Load()
 	if healthy {
 		status.Active.Store(true)

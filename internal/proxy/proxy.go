@@ -66,7 +66,7 @@ func NewProxy(configPath string) *Proxy {
 		ConfigPath: configPath,
 	}
 
-	hc := rt.Snapshot.Raw.HealthCheck
+	hc := rt.State().Snapshot.Raw.HealthCheck
 	proxy.HealthChecker = health.NewHealthChecker(proxy.Runtime, &hc)
 	clientIPs, err := middleware.NewClientIPResolver(os.Getenv("TRUSTED_PROXY_CIDRS"))
 	if err != nil {
@@ -125,7 +125,7 @@ func (p *Proxy) Start() error {
 	mux.HandleFunc("/metrics", http.NotFound)
 	mux.HandleFunc("/metrics/prometheus", http.NotFound)
 
-	port := strconv.Itoa(p.Runtime.Snapshot.Raw.ProxyPort)
+	port := strconv.Itoa(p.Runtime.State().Snapshot.Raw.ProxyPort)
 	p.srv = &http.Server{
 		Addr:              ":" + port,
 		Handler:           mux,

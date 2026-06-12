@@ -13,19 +13,25 @@ import (
 	"time"
 )
 
+type RuntimeState struct {
+	Snapshot     *config.Snapshot
+	HTTPClient   *http.Client
+	LoadBalancer lb.LoadBalancer
+
+	backendStatuses map[string]*BackendStatus
+}
+
 type Runtime struct {
-	mu sync.RWMutex
+	updateMu sync.Mutex
 
 	Config   *config.Service
-	Snapshot *config.Snapshot
+	Metrics  *metrics.Metrics
+	statuses *BackendRegistry
 
-	BackendStatus map[string]*BackendStatus
+	state     atomic.Pointer[RuntimeState]
+	StartTime time.Time
 
-	LoadBalancer lb.LoadBalancer
-	Metrics      *metrics.Metrics
-	HTTPClient   *http.Client
-
-	StartTime         time.Time
+	callbackMu        sync.RWMutex
 	onRateLimitUpdate func(domain string, cfg config.RateLimitingConfig)
 }
 
@@ -56,27 +62,124 @@ func NewRuntime(configPath string) (*Runtime, error) {
 	}
 
 	snapshot := cfgService.Snapshot()
+	runtimeMetrics := metrics.NewMetrics()
 
 	rt := &Runtime{
-		Config:        cfgService,
-		Snapshot:      snapshot,
-		Metrics:       metrics.NewMetrics(),
-		BackendStatus: make(map[string]*BackendStatus),
-		StartTime:     time.Now(),
+		Config:    cfgService,
+		Metrics:   runtimeMetrics,
+		statuses:  NewBackendRegistry(),
+		StartTime: time.Now(),
 	}
 
 	for _, b := range snapshot.Raw.Backends {
 		rt.Metrics.Backends.Register(b.URL)
 	}
 
-	rt.initBackendStatus(snapshot)
-	rt.rebuildHTTPClient(snapshot)
-	rt.rebuildLoadBalancer(snapshot)
+	statuses := rt.statuses.Reconcile(snapshot.Raw.Backends)
+	initial := rt.buildRuntimeState(nil, snapshot, statuses)
+
+	rt.state.Store(initial)
 
 	return rt, nil
 }
 
-func (rt *Runtime) rebuildHTTPClient(snapshot *config.Snapshot) {
+func (state *RuntimeState) BackendStatus(url string) (*BackendStatus, bool) {
+	if state == nil {
+		return nil, false
+	}
+
+	status, ok := state.backendStatuses[url]
+	return status, ok
+}
+
+func (state *RuntimeState) Backends() []config.BackendResponse {
+	if state == nil || state.Snapshot == nil || state.Snapshot.Raw == nil {
+		return nil
+	}
+
+	backends := state.Snapshot.Raw.Backends
+	resp := make([]config.BackendResponse, 0, len(backends))
+	for _, backend := range backends {
+		if backend == nil {
+			continue
+		}
+
+		item := config.BackendResponse{
+			URL:     backend.URL,
+			Weight:  backend.Weight,
+			Enabled: backend.Enabled,
+		}
+		if status, ok := state.BackendStatus(backend.URL); ok {
+			item.Active = status.Active.Load()
+			item.ErrorCount = status.ErrorCount.Load()
+			item.LastError = status.GetLastError()
+		}
+
+		resp = append(resp, item)
+	}
+
+	return resp
+}
+
+func (state *RuntimeState) Backend(url string) *config.BackendResponse {
+	if state == nil || state.Snapshot == nil {
+		return nil
+	}
+
+	backend := state.Snapshot.BackendsByURL[url]
+	if backend == nil {
+		return nil
+	}
+
+	resp := &config.BackendResponse{
+		URL:     backend.URL,
+		Weight:  backend.Weight,
+		Enabled: backend.Enabled,
+	}
+	if status, ok := state.BackendStatus(url); ok {
+		resp.Active = status.Active.Load()
+		resp.ErrorCount = status.ErrorCount.Load()
+		resp.LastError = status.GetLastError()
+	}
+
+	return resp
+}
+
+func (rt *Runtime) buildRuntimeState(previous *RuntimeState, snapshot *config.Snapshot, statuses map[string]*BackendStatus) *RuntimeState {
+	var client *http.Client
+	var balancer lb.LoadBalancer
+
+	if previous != nil {
+		client = previous.HTTPClient
+		balancer = previous.LoadBalancer
+	}
+
+	if previous == nil ||
+		previous.Snapshot == nil ||
+		previous.HTTPClient == nil ||
+		previous.Snapshot.Raw.Timeouts != snapshot.Raw.Timeouts {
+		client = buildHTTPClient(snapshot)
+	}
+
+	if previous == nil ||
+		previous.Snapshot == nil ||
+		previous.LoadBalancer == nil ||
+		previous.Snapshot.Raw.LBStrategy != snapshot.Raw.LBStrategy {
+		balancer = lb.GetLoadBalancer(
+			snapshot.Raw.LBStrategy,
+			rt.Metrics,
+		)
+	}
+
+	return &RuntimeState{
+		Snapshot:        snapshot,
+		HTTPClient:      client,
+		LoadBalancer:    balancer,
+		backendStatuses: statuses,
+	}
+}
+
+func buildHTTPClient(snapshot *config.Snapshot) *http.Client {
 	t := snapshot.Raw.Timeouts
 
 	logger.Debug("Rebuilding HTTP client", map[string]interface{}{
@@ -104,143 +207,117 @@ func (rt *Runtime) rebuildHTTPClient(snapshot *config.Snapshot) {
 		}).DialContext,
 	}
 
-	rt.HTTPClient = &http.Client{
+	return &http.Client{
 		Transport: transport,
 		Timeout:   time.Duration(t.ResponseTimeoutMs) * time.Millisecond,
 	}
 }
 
-func (rt *Runtime) initBackendStatus(snapshot *config.Snapshot) {
-	for _, b := range snapshot.Raw.Backends {
-		rt.BackendStatus[b.URL] = &BackendStatus{}
-		rt.BackendStatus[b.URL].Active.Store(false)
-		rt.BackendStatus[b.URL].ErrorCount.Store(0)
-		rt.BackendStatus[b.URL].SetLastError("")
-		rt.BackendStatus[b.URL].LastHealthCheck.Store(0)
+func (rt *Runtime) applyUpdate(mutate func() error) error {
+	rt.updateMu.Lock()
+	defer rt.updateMu.Unlock()
+
+	if err := mutate(); err != nil {
+		return err
 	}
-}
-
-func (rt *Runtime) rebuildLoadBalancer(snapshot *config.Snapshot) {
-	rt.LoadBalancer = lb.GetLoadBalancer(snapshot.Raw.LBStrategy, rt.Metrics)
-}
-
-func (rt *Runtime) RefreshFromConfig() error {
-	rt.mu.Lock()
-	defer rt.mu.Unlock()
 
 	snapshot := rt.Config.Snapshot()
-	rt.Snapshot = snapshot
+	previous := rt.State()
 
-	rt.syncBackendStatus(snapshot)
-	rt.rebuildHTTPClient(snapshot)
-	rt.rebuildLoadBalancer(snapshot)
+	statuses := rt.statuses.Reconcile(snapshot.Raw.Backends)
+	next := rt.buildRuntimeState(previous, snapshot, statuses)
+
+	rt.registerBackendMetrics(snapshot)
+
+	published := rt.state.Swap(next)
+
+	rt.deregisterRemovedBackendMetrics(published, next)
+	closeReplacedHTTPClient(published, next)
 
 	return nil
 }
 
-func (rt *Runtime) syncBackendStatus(snapshot *config.Snapshot) {
-	next := make(map[string]*BackendStatus, len(snapshot.Raw.Backends))
-	for _, b := range snapshot.Raw.Backends {
-		if b == nil {
-			continue
+func (rt *Runtime) registerBackendMetrics(snapshot *config.Snapshot) {
+	if snapshot == nil || snapshot.Raw == nil {
+		return
+	}
+
+	for _, backend := range snapshot.Raw.Backends {
+		if backend != nil {
+			rt.Metrics.Backends.Register(backend.URL)
 		}
-		if current, ok := rt.BackendStatus[b.URL]; ok {
-			next[b.URL] = current
-			continue
-		}
-		next[b.URL] = &BackendStatus{}
 	}
-	rt.BackendStatus = next
 }
 
-func (rt *Runtime) AddBackend(backend config.BackendConfig) error {
-	if err := rt.Config.AddBackend(backend); err != nil {
-		return err
+func (rt *Runtime) deregisterRemovedBackendMetrics(previous, next *RuntimeState) {
+	if previous == nil || previous.Snapshot == nil || previous.Snapshot.Raw == nil {
+		return
 	}
-	rt.Metrics.Backends.Register(backend.URL)
-	return rt.RefreshFromConfig()
-}
 
-func (rt *Runtime) RemoveBackend(url string) error {
-	if err := rt.Config.RemoveBackend(url); err != nil {
-		return err
+	var nextBackends map[string]*config.BackendConfig
+	if next != nil && next.Snapshot != nil {
+		nextBackends = next.Snapshot.BackendsByURL
 	}
-	rt.Metrics.Backends.Deregister(url)
-	return rt.RefreshFromConfig()
-}
 
-func (rt *Runtime) UpdateBackend(url string, weight int32, enabled bool) error {
-	if err := rt.Config.UpdateBackend(url, weight, enabled); err != nil {
-		return err
-	}
-	return rt.RefreshFromConfig()
-}
-
-func (rt *Runtime) GetBackends() []config.BackendResponse {
-	rt.mu.RLock()
-	defer rt.mu.RUnlock()
-
-	backends := rt.Snapshot.Raw.Backends
-	resp := make([]config.BackendResponse, 0, len(backends))
-	for _, backend := range backends {
+	for _, backend := range previous.Snapshot.Raw.Backends {
 		if backend == nil {
 			continue
 		}
-
-		item := config.BackendResponse{
-			URL:     backend.URL,
-			Weight:  backend.Weight,
-			Enabled: backend.Enabled,
+		if nextBackends == nil || nextBackends[backend.URL] == nil {
+			rt.Metrics.Backends.Deregister(backend.URL)
 		}
+	}
+}
 
-		if status := rt.BackendStatus[backend.URL]; status != nil {
-			item.Active = status.Active.Load()
-			item.ErrorCount = status.ErrorCount.Load()
-			item.LastError = status.GetLastError()
-		}
-
-		resp = append(resp, item)
+func closeReplacedHTTPClient(previous, next *RuntimeState) {
+	if previous == nil || previous.HTTPClient == nil {
+		return
+	}
+	if next != nil && previous.HTTPClient == next.HTTPClient {
+		return
 	}
 
-	return resp
+	previous.HTTPClient.CloseIdleConnections()
+}
+
+func (rt *Runtime) State() *RuntimeState {
+	return rt.state.Load()
+}
+
+func (rt *Runtime) AddBackend(backend config.BackendConfig) error {
+	return rt.applyUpdate(func() error {
+		return rt.Config.AddBackend(backend)
+	})
+}
+
+func (rt *Runtime) RemoveBackend(url string) error {
+	return rt.applyUpdate(func() error {
+		return rt.Config.RemoveBackend(url)
+	})
+}
+
+func (rt *Runtime) UpdateBackend(url string, weight int32, enabled bool) error {
+	return rt.applyUpdate(func() error {
+		return rt.Config.UpdateBackend(url, weight, enabled)
+	})
+}
+
+func (rt *Runtime) GetBackends() []config.BackendResponse {
+	return rt.State().Backends()
 }
 
 func (rt *Runtime) GetBackend(url string) *config.BackendResponse {
-	rt.mu.RLock()
-	defer rt.mu.RUnlock()
-
-	backend := rt.Snapshot.BackendsByURL[url]
-	if backend == nil {
-		return nil
-	}
-
-	resp := &config.BackendResponse{
-		URL:     backend.URL,
-		Weight:  backend.Weight,
-		Enabled: backend.Enabled,
-	}
-
-	if status := rt.BackendStatus[url]; status != nil {
-		resp.Active = status.Active.Load()
-		resp.ErrorCount = status.ErrorCount.Load()
-		resp.LastError = status.GetLastError()
-	}
-
-	return resp
+	return rt.State().Backend(url)
 }
 
 func (rt *Runtime) UpdateGlobalConfig(proxyPort int32, strategy string) error {
-	if err := rt.Config.UpdateGlobal(int(proxyPort), strategy); err != nil {
-		return err
-	}
-	return rt.RefreshFromConfig()
+	return rt.applyUpdate(func() error {
+		return rt.Config.UpdateGlobal(int(proxyPort), strategy)
+	})
 }
 
 func (rt *Runtime) GetGlobalConfig() config.GlobalConfigResponse {
-	rt.mu.RLock()
-	defer rt.mu.RUnlock()
-
-	raw := rt.Snapshot.Raw
+	raw := rt.State().Snapshot.Raw
 	return config.GlobalConfigResponse{
 		ProxyPort:  raw.ProxyPort,
 		LBStrategy: raw.LBStrategy,
@@ -248,11 +325,9 @@ func (rt *Runtime) GetGlobalConfig() config.GlobalConfigResponse {
 }
 
 func (rt *Runtime) GetVirtualHosts() []config.VirtualHostResponse {
-	rt.mu.RLock()
-	defer rt.mu.RUnlock()
-
-	resp := make([]config.VirtualHostResponse, 0, len(rt.Snapshot.Raw.VirtualHosts))
-	for _, v := range rt.Snapshot.Raw.VirtualHosts {
+	virtualHosts := rt.State().Snapshot.Raw.VirtualHosts
+	resp := make([]config.VirtualHostResponse, 0, len(virtualHosts))
+	for _, v := range virtualHosts {
 		resp = append(resp, config.VirtualHostResponse{
 			Domain:     v.Domain,
 			Backends:   append([]string(nil), v.Backends...),
@@ -264,23 +339,18 @@ func (rt *Runtime) GetVirtualHosts() []config.VirtualHostResponse {
 }
 
 func (rt *Runtime) AddVirtualHost(vhost config.VirtualHost) error {
-	if err := rt.Config.AddVirtualHost(vhost); err != nil {
-		return err
-	}
-	return rt.RefreshFromConfig()
+	return rt.applyUpdate(func() error {
+		return rt.Config.AddVirtualHost(vhost)
+	})
 }
 
 func (rt *Runtime) RemoveVirtualHost(domain string) error {
-	if err := rt.Config.RemoveVirtualHost(domain); err != nil {
-		return err
-	}
-	return rt.RefreshFromConfig()
+	return rt.applyUpdate(func() error {
+		return rt.Config.RemoveVirtualHost(domain)
+	})
 }
 
 func (rt *Runtime) GetSecurityConfigHost(host string) config.SecurityConfigResponse {
-	rt.mu.RLock()
-	defer rt.mu.RUnlock()
-
 	if idx := len(host); idx > 0 {
 		for i, c := range host {
 			if c == ':' {
@@ -291,7 +361,7 @@ func (rt *Runtime) GetSecurityConfigHost(host string) config.SecurityConfigRespo
 		_ = idx
 	}
 
-	vhost := rt.Snapshot.VHostsByDomain[host]
+	vhost := rt.State().Snapshot.VHostsByDomain[host]
 	if vhost == nil || vhost.Security == nil {
 		return config.SecurityConfigResponse{}
 	}
@@ -302,29 +372,36 @@ func (rt *Runtime) GetSecurityConfigHost(host string) config.SecurityConfigRespo
 }
 
 func (rt *Runtime) UpdateVirtualHost(domain string, vhost config.VirtualHost) error {
-	if err := rt.Config.UpdateVirtualHost(domain, vhost); err != nil {
-		return err
-	}
-	return rt.RefreshFromConfig()
+	return rt.applyUpdate(func() error {
+		return rt.Config.UpdateVirtualHost(domain, vhost)
+	})
 }
 
 func (rt *Runtime) SetOnRateLimitUpdate(cb func(domain string, cfg config.RateLimitingConfig)) {
+	rt.callbackMu.Lock()
+	defer rt.callbackMu.Unlock()
 	rt.onRateLimitUpdate = cb
 }
 
 func (rt *Runtime) UpdateVirtualHostRateLimiting(domain string, rate config.RateLimitingConfig) error {
-	if err := rt.Config.UpdateVirtualHostRateLimiting(domain, rate); err != nil {
+	if err := rt.applyUpdate(func() error {
+		return rt.Config.UpdateVirtualHostRateLimiting(domain, rate)
+	}); err != nil {
 		return err
 	}
-	rt.onRateLimitUpdate(domain, rate)
-	return rt.RefreshFromConfig()
+
+	rt.callbackMu.RLock()
+	callback := rt.onRateLimitUpdate
+	rt.callbackMu.RUnlock()
+	if callback != nil {
+		callback(domain, rate)
+	}
+
+	return nil
 }
 
 func (rt *Runtime) GetVirtualHostSecurityConfig(domain string) *config.SecurityConfigResponse {
-	rt.mu.RLock()
-	defer rt.mu.RUnlock()
-
-	vhost := rt.Snapshot.VHostsByDomain[domain]
+	vhost := rt.State().Snapshot.VHostsByDomain[domain]
 	if vhost == nil || vhost.Security == nil {
 		return nil
 	}
@@ -336,10 +413,7 @@ func (rt *Runtime) GetVirtualHostSecurityConfig(domain string) *config.SecurityC
 }
 
 func (rt *Runtime) GetVirtualHost(host string) *config.VirtualHostResponse {
-	rt.mu.RLock()
-	defer rt.mu.RUnlock()
-
-	vhost := rt.Snapshot.VHostsByDomain[host]
+	vhost := rt.State().Snapshot.VHostsByDomain[host]
 	if vhost == nil {
 		return nil
 	}
@@ -353,7 +427,5 @@ func (rt *Runtime) GetVirtualHost(host string) *config.VirtualHostResponse {
 }
 
 func (rt *Runtime) SnapshotView() *config.Snapshot {
-	rt.mu.RLock()
-	defer rt.mu.RUnlock()
-	return rt.Snapshot
+	return rt.State().Snapshot
 }

@@ -21,7 +21,8 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		state.Metrics.HTTP.RecordMethod(r.Method)
-		snapshot := state.SnapshotView()
+		current := state.State()
+		snapshot := current.Snapshot
 		originalPath := r.URL.Path
 		requestID := ensureRequestID(w, r)
 
@@ -92,7 +93,7 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 			if b == nil || !b.Enabled {
 				continue
 			}
-			if status := state.BackendStatus[b.URL]; status != nil && status.Active.Load() {
+			if status, ok := current.BackendStatus(b.URL); ok && status.Active.Load() {
 				backends = append(backends, b)
 			}
 		}
@@ -103,7 +104,7 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 		}
 
 		backendCandidates := append([]*config.BackendConfig(nil), backends...)
-		backend := state.LoadBalancer.Next(backendCandidates)
+		backend := current.LoadBalancer.Next(backendCandidates)
 		if backend == nil {
 			logAndReturn(http.StatusServiceUnavailable, "All servers are down", "", nil)
 			return
@@ -127,7 +128,7 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 
-		resp, backend, err := executeProxyRequest(ctx, state, r, pathRoute, host, requestID, backendCandidates)
+		resp, backend, err := executeProxyRequest(ctx, state, current, r, pathRoute, host, requestID, backendCandidates)
 		duration := time.Since(start)
 		fields["duration_ms"] = duration.Milliseconds()
 
@@ -213,6 +214,7 @@ func newRequestID() string {
 func executeProxyRequest(
 	ctx context.Context,
 	state *runtime.Runtime,
+	current *runtime.RuntimeState,
 	original *http.Request,
 	pathRoute *config.PathRoute,
 	host string,
@@ -225,13 +227,13 @@ func executeProxyRequest(
 	var lastBackend *config.BackendConfig
 
 	for attempt := 0; len(candidates) > 0; attempt++ {
-		backend := state.LoadBalancer.Next(candidates)
+		backend := current.LoadBalancer.Next(candidates)
 		if backend == nil {
 			break
 		}
 		lastBackend = backend
 
-		resp, err := doProxyRequest(ctx, state, original, pathRoute, host, requestID, backend)
+		resp, err := doProxyRequest(ctx, state, current, original, pathRoute, host, requestID, backend)
 		if err == nil {
 			return resp, backend, nil
 		}
@@ -263,6 +265,7 @@ func executeProxyRequest(
 func doProxyRequest(
 	ctx context.Context,
 	state *runtime.Runtime,
+	current *runtime.RuntimeState,
 	original *http.Request,
 	pathRoute *config.PathRoute,
 	host string,
@@ -302,7 +305,7 @@ func doProxyRequest(
 		req.URL.RawPath = req.URL.Path
 	}
 
-	return state.HTTPClient.Do(req)
+	return current.HTTPClient.Do(req)
 }
 
 func isRetryableRequest(r *http.Request) bool {

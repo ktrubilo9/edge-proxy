@@ -34,7 +34,8 @@ func HealthHandler(rt *runtime.Runtime) http.HandlerFunc {
 			"user_agent":  r.UserAgent(),
 		})
 
-		backends := rt.GetBackends()
+		current := rt.State()
+		backends := current.Backends()
 
 		activeCount := 0
 		backendStatuses := make([]health.BackendStatus, 0, len(backends))
@@ -48,7 +49,7 @@ func HealthHandler(rt *runtime.Runtime) http.HandlerFunc {
 				currentConnections = int32(bm.ActiveConnections)
 			}
 			lastHealthCheck := int64(0)
-			if status := rt.BackendStatus[b.URL]; status != nil {
+			if status, ok := current.BackendStatus(b.URL); ok {
 				lastHealthCheck = status.LastHealthCheck.Load()
 			}
 
