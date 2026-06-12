@@ -26,8 +26,10 @@ type Runtime struct {
 	Metrics  *metrics.Metrics
 	statuses *BackendRegistry
 
-	state             atomic.Pointer[RuntimeState]
-	StartTime         time.Time
+	state     atomic.Pointer[RuntimeState]
+	StartTime time.Time
+
+	callbackMu        sync.RWMutex
 	onRateLimitUpdate func(domain string, cfg config.RateLimitingConfig)
 }
 
@@ -144,19 +146,58 @@ func buildHTTPClient(snapshot *config.Snapshot) *http.Client {
 	}
 }
 
-func (rt *Runtime) RefreshFromConfig() error {
+func (rt *Runtime) applyUpdate(mutate func() error) error {
 	rt.updateMu.Lock()
 	defer rt.updateMu.Unlock()
 
+	if err := mutate(); err != nil {
+		return err
+	}
+
 	snapshot := rt.Config.Snapshot()
-	current := rt.state.Load()
-	next := rt.buildRuntimeState(current, snapshot)
+	previous := rt.State()
+	next := rt.buildRuntimeState(previous, snapshot)
+
+	rt.registerBackendMetrics(snapshot)
 	rt.statuses.Reconcile(snapshot.Raw.Backends)
 
-	previous := rt.state.Swap(next)
-	closeReplacedHTTPClient(previous, next)
+	published := rt.state.Swap(next)
+	rt.deregisterRemovedBackendMetrics(published, next)
+	closeReplacedHTTPClient(published, next)
 
 	return nil
+}
+
+func (rt *Runtime) registerBackendMetrics(snapshot *config.Snapshot) {
+	if snapshot == nil || snapshot.Raw == nil {
+		return
+	}
+
+	for _, backend := range snapshot.Raw.Backends {
+		if backend != nil {
+			rt.Metrics.Backends.Register(backend.URL)
+		}
+	}
+}
+
+func (rt *Runtime) deregisterRemovedBackendMetrics(previous, next *RuntimeState) {
+	if previous == nil || previous.Snapshot == nil || previous.Snapshot.Raw == nil {
+		return
+	}
+
+	var nextBackends map[string]*config.BackendConfig
+	if next != nil && next.Snapshot != nil {
+		nextBackends = next.Snapshot.BackendsByURL
+	}
+
+	for _, backend := range previous.Snapshot.Raw.Backends {
+		if backend == nil {
+			continue
+		}
+		if nextBackends == nil || nextBackends[backend.URL] == nil {
+			rt.Metrics.Backends.Deregister(backend.URL)
+		}
+	}
 }
 
 func closeReplacedHTTPClient(previous, next *RuntimeState) {
@@ -179,26 +220,21 @@ func (rt *Runtime) BackendStatus(url string) (*BackendStatus, bool) {
 }
 
 func (rt *Runtime) AddBackend(backend config.BackendConfig) error {
-	if err := rt.Config.AddBackend(backend); err != nil {
-		return err
-	}
-	rt.Metrics.Backends.Register(backend.URL)
-	return rt.RefreshFromConfig()
+	return rt.applyUpdate(func() error {
+		return rt.Config.AddBackend(backend)
+	})
 }
 
 func (rt *Runtime) RemoveBackend(url string) error {
-	if err := rt.Config.RemoveBackend(url); err != nil {
-		return err
-	}
-	rt.Metrics.Backends.Deregister(url)
-	return rt.RefreshFromConfig()
+	return rt.applyUpdate(func() error {
+		return rt.Config.RemoveBackend(url)
+	})
 }
 
 func (rt *Runtime) UpdateBackend(url string, weight int32, enabled bool) error {
-	if err := rt.Config.UpdateBackend(url, weight, enabled); err != nil {
-		return err
-	}
-	return rt.RefreshFromConfig()
+	return rt.applyUpdate(func() error {
+		return rt.Config.UpdateBackend(url, weight, enabled)
+	})
 }
 
 func (rt *Runtime) GetBackends() []config.BackendResponse {
@@ -249,10 +285,9 @@ func (rt *Runtime) GetBackend(url string) *config.BackendResponse {
 }
 
 func (rt *Runtime) UpdateGlobalConfig(proxyPort int32, strategy string) error {
-	if err := rt.Config.UpdateGlobal(int(proxyPort), strategy); err != nil {
-		return err
-	}
-	return rt.RefreshFromConfig()
+	return rt.applyUpdate(func() error {
+		return rt.Config.UpdateGlobal(int(proxyPort), strategy)
+	})
 }
 
 func (rt *Runtime) GetGlobalConfig() config.GlobalConfigResponse {
@@ -278,17 +313,15 @@ func (rt *Runtime) GetVirtualHosts() []config.VirtualHostResponse {
 }
 
 func (rt *Runtime) AddVirtualHost(vhost config.VirtualHost) error {
-	if err := rt.Config.AddVirtualHost(vhost); err != nil {
-		return err
-	}
-	return rt.RefreshFromConfig()
+	return rt.applyUpdate(func() error {
+		return rt.Config.AddVirtualHost(vhost)
+	})
 }
 
 func (rt *Runtime) RemoveVirtualHost(domain string) error {
-	if err := rt.Config.RemoveVirtualHost(domain); err != nil {
-		return err
-	}
-	return rt.RefreshFromConfig()
+	return rt.applyUpdate(func() error {
+		return rt.Config.RemoveVirtualHost(domain)
+	})
 }
 
 func (rt *Runtime) GetSecurityConfigHost(host string) config.SecurityConfigResponse {
@@ -313,22 +346,32 @@ func (rt *Runtime) GetSecurityConfigHost(host string) config.SecurityConfigRespo
 }
 
 func (rt *Runtime) UpdateVirtualHost(domain string, vhost config.VirtualHost) error {
-	if err := rt.Config.UpdateVirtualHost(domain, vhost); err != nil {
-		return err
-	}
-	return rt.RefreshFromConfig()
+	return rt.applyUpdate(func() error {
+		return rt.Config.UpdateVirtualHost(domain, vhost)
+	})
 }
 
 func (rt *Runtime) SetOnRateLimitUpdate(cb func(domain string, cfg config.RateLimitingConfig)) {
+	rt.callbackMu.Lock()
+	defer rt.callbackMu.Unlock()
 	rt.onRateLimitUpdate = cb
 }
 
 func (rt *Runtime) UpdateVirtualHostRateLimiting(domain string, rate config.RateLimitingConfig) error {
-	if err := rt.Config.UpdateVirtualHostRateLimiting(domain, rate); err != nil {
+	if err := rt.applyUpdate(func() error {
+		return rt.Config.UpdateVirtualHostRateLimiting(domain, rate)
+	}); err != nil {
 		return err
 	}
-	rt.onRateLimitUpdate(domain, rate)
-	return rt.RefreshFromConfig()
+
+	rt.callbackMu.RLock()
+	callback := rt.onRateLimitUpdate
+	rt.callbackMu.RUnlock()
+	if callback != nil {
+		callback(domain, rate)
+	}
+
+	return nil
 }
 
 func (rt *Runtime) GetVirtualHostSecurityConfig(domain string) *config.SecurityConfigResponse {
