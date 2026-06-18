@@ -1,12 +1,28 @@
 package config
 
 func ApplyDefaults(fullConfig *FullConfig) {
-	if fullConfig.ProxyPort == 0 {
-		fullConfig.ProxyPort = 8080
+	if fullConfig == nil {
+		return
 	}
-	if fullConfig.LBStrategy == "" {
-		fullConfig.LBStrategy = "least-connections"
+
+	if fullConfig.Server.ProxyPort == 0 {
+		fullConfig.Server.ProxyPort = 8080
 	}
+	if fullConfig.Server.AdminGrpcPort == 0 {
+		fullConfig.Server.AdminGrpcPort = 50051
+	}
+
+	if fullConfig.LoadBalancer.Strategy == "" {
+		fullConfig.LoadBalancer.Strategy = "least-connections"
+	}
+
+	ensureDefaultSecurityPolicy(fullConfig)
+	for i := range fullConfig.VirtualHosts {
+		if fullConfig.VirtualHosts[i].SecurityPolicyID == "" {
+			fullConfig.VirtualHosts[i].SecurityPolicyID = "default"
+		}
+	}
+
 	if fullConfig.HealthCheck.Path == "" {
 		fullConfig.HealthCheck.Path = "/health"
 	}
@@ -41,4 +57,19 @@ func ApplyDefaults(fullConfig *FullConfig) {
 	if fullConfig.Logging.BufferSize == 0 {
 		fullConfig.Logging.BufferSize = 4096
 	}
+}
+
+func ensureDefaultSecurityPolicy(fullConfig *FullConfig) {
+	for _, policy := range fullConfig.Security.Policies {
+		if policy.Id == "default" {
+			return
+		}
+	}
+
+	fullConfig.Security.Policies = append([]SecurityPolicy{
+		{
+			Id:           "default",
+			RateLimiting: RateLimitingConfig{},
+		},
+	}, fullConfig.Security.Policies...)
 }

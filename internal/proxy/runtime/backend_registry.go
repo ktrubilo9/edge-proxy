@@ -16,7 +16,7 @@ func NewBackendRegistry() *BackendRegistry {
 	}
 }
 
-func (br *BackendRegistry) Get(url string) (*BackendStatus, bool) {
+func (br *BackendRegistry) Get(id string) (*BackendStatus, bool) {
 	if br == nil {
 		return nil, false
 	}
@@ -24,7 +24,7 @@ func (br *BackendRegistry) Get(url string) (*BackendStatus, bool) {
 	br.mu.RLock()
 	defer br.mu.RUnlock()
 
-	status, ok := br.statuses[url]
+	status, ok := br.statuses[id]
 	return status, ok
 }
 
@@ -42,12 +42,12 @@ func (br *BackendRegistry) Reconcile(backends []*config.BackendConfig) map[strin
 			continue
 		}
 
-		if status, ok := br.statuses[backend.URL]; ok {
-			next[backend.URL] = status
+		if status, ok := br.statuses[backend.Id]; ok {
+			next[backend.Id] = status
 			continue
 		}
 
-		next[backend.URL] = &BackendStatus{}
+		next[backend.Id] = &BackendStatus{}
 	}
 
 	br.statuses = next

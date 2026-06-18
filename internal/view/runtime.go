@@ -3,6 +3,7 @@ package view
 import "edge-proxy/internal/config"
 
 type BackendResponse struct {
+	Id         string `json:"id"`
 	URL        string `json:"url"`
 	Weight     int32  `json:"weight"`
 	Enabled    bool   `json:"enabled"`
@@ -11,18 +12,33 @@ type BackendResponse struct {
 	LastError  string `json:"last_error,omitempty"`
 }
 
-type GlobalConfigResponse struct {
-	ProxyPort  int    `json:"proxy_port"`
-	LBStrategy string `json:"lb_strategy"`
+type ServerConfigResponse struct {
+	ProxyPort     int `json:"proxy_port"`
+	AdminGrpcPort int `json:"admin_grpc_port"`
+}
+
+type LoadBalancerConfigResponse struct {
+	Strategy string `json:"strategy"`
 }
 
 type LoggingConfigResponse = config.LoggingConfig
 
 type VirtualHostResponse struct {
-	Domain     string                  `json:"domain"`
-	Backends   []string                `json:"backends"`
-	PathRoutes []config.PathRoute      `json:"path_routes,omitempty"`
-	Security   *SecurityConfigResponse `json:"security,omitempty"`
+	Domain           string             `json:"domain"`
+	BackendIDs       []string           `json:"backend_ids"`
+	PathRoutes       []config.PathRoute `json:"path_routes,omitempty"`
+	SecurityPolicyID string             `json:"security_policy_id"`
+}
+
+type SecurityPolicyResponse struct {
+	Id           string                    `json:"id"`
+	RateLimiting config.RateLimitingConfig `json:"rate_limiting"`
+}
+
+type VirtualHostSecurityResponse struct {
+	Domain           string                 `json:"domain"`
+	SecurityPolicyID string                 `json:"security_policy_id"`
+	Policy           SecurityPolicyResponse `json:"policy"`
 }
 
 type HealthCheckResponse = config.HealthCheckConfig

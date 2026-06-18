@@ -16,11 +16,16 @@ func TestProxyHandlerServesTrafficDuringRuntimeUpdates(t *testing.T) {
 	backendB := newRuntimeUpdateBackend(t, "B")
 
 	cfg := &config.FullConfig{
-		ProxyPort:  8080,
-		LBStrategy: "least-connections",
+		Server: config.ServerConfig{
+			ProxyPort:     8080,
+			AdminGrpcPort: 50051,
+		},
+		LoadBalancer: config.LoadBalancingConfig{
+			Strategy: "least-connections",
+		},
 		Backends: []*config.BackendConfig{
-			{URL: backendA.URL, Weight: 1, Enabled: true},
-			{URL: backendB.URL, Weight: 1, Enabled: true},
+			{Id: "backend-a", URL: backendA.URL, Weight: 1, Enabled: true},
+			{Id: "backend-b", URL: backendB.URL, Weight: 1, Enabled: true},
 		},
 		HealthCheck: config.HealthCheckConfig{
 			Path:             "/health",
@@ -37,9 +42,9 @@ func TestProxyHandlerServesTrafficDuringRuntimeUpdates(t *testing.T) {
 		},
 		VirtualHosts: []config.VirtualHost{
 			{
-				Domain:   "app.local",
-				Backends: []string{backendA.URL},
-				Security: &config.SecurityConfig{},
+				Domain:           "app.local",
+				BackendIDs:       []string{"backend-a"},
+				SecurityPolicyID: "default",
 			},
 		},
 	}
@@ -90,14 +95,14 @@ func TestProxyHandlerServesTrafficDuringRuntimeUpdates(t *testing.T) {
 		<-start
 
 		for updateIndex := 0; updateIndex < updates; updateIndex++ {
-			backendURL := backendA.URL
+			backendID := "backend-a"
 			if updateIndex%2 == 1 {
-				backendURL = backendB.URL
+				backendID = "backend-b"
 			}
 
 			if err := rt.UpdateVirtualHost("app.local", config.VirtualHost{
-				Backends: []string{backendURL},
-				Security: &config.SecurityConfig{},
+				BackendIDs:       []string{backendID},
+				SecurityPolicyID: "default",
 			}); err != nil {
 				errs <- fmt.Errorf("update virtual host: %w", err)
 				return
@@ -120,8 +125,8 @@ func TestProxyHandlerServesTrafficDuringRuntimeUpdates(t *testing.T) {
 	if vhost == nil {
 		t.Fatal("virtual host disappeared after concurrent updates")
 	}
-	if len(vhost.Backends) != 1 {
-		t.Fatalf("virtual host backend count = %d, want 1", len(vhost.Backends))
+	if len(vhost.BackendIDs) != 1 {
+		t.Fatalf("virtual host backend count = %d, want 1", len(vhost.BackendIDs))
 	}
 	if current.HTTPClient != initialClient {
 		t.Fatal("routing updates replaced the HTTP client")

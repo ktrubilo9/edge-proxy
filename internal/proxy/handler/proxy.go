@@ -39,15 +39,15 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 			vh := &snapshot.Raw.VirtualHosts[i]
 			if vh.Domain == host {
 				vhost = vh
-				targetBackends = vh.Backends
+				targetBackends = vh.BackendIDs
 				// Prefer the longest matching route so specific prefixes beat broader catch-all routes.
 				for j := range vh.PathRoutes {
 					pr := &vh.PathRoutes[j]
 					if strings.HasPrefix(r.URL.Path, pr.Path) && len(pr.Path) > longestPathMatch {
 						pathRoute = pr
 						longestPathMatch = len(pr.Path)
-						if len(pr.Backends) > 0 {
-							targetBackends = pr.Backends
+						if len(pr.BackendIDs) > 0 {
+							targetBackends = pr.BackendIDs
 						}
 					}
 				}
@@ -88,12 +88,12 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 		}
 
 		var backends []*config.BackendConfig
-		for _, bURL := range targetBackends {
-			b := snapshot.BackendsByURL[bURL]
+		for _, backendID := range targetBackends {
+			b := snapshot.BackendsById[backendID]
 			if b == nil || !b.Enabled {
 				continue
 			}
-			if status, ok := current.BackendStatus(b.URL); ok && status.Active.Load() {
+			if status, ok := current.BackendStatus(b.Id); ok && status.Active.Load() {
 				backends = append(backends, b)
 			}
 		}
@@ -244,7 +244,7 @@ func executeProxyRequest(
 		}
 
 		// Retry idempotent requests once on a different backend to avoid failing fast on a single dead peer.
-		candidates = filterOutBackend(candidates, backend.URL)
+		candidates = filterOutBackend(candidates, backend.Id)
 		if len(candidates) == 0 {
 			break
 		}
@@ -317,10 +317,10 @@ func isRetryableRequest(r *http.Request) bool {
 	}
 }
 
-func filterOutBackend(backends []*config.BackendConfig, targetURL string) []*config.BackendConfig {
+func filterOutBackend(backends []*config.BackendConfig, targetID string) []*config.BackendConfig {
 	filtered := backends[:0]
 	for _, backend := range backends {
-		if backend.URL != targetURL {
+		if backend.Id != targetID {
 			filtered = append(filtered, backend)
 		}
 	}

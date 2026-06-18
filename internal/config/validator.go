@@ -21,20 +21,27 @@ func (v DefaultValidator) Validate(cfg *FullConfig) error {
 		return fmt.Errorf("config cannot be nil")
 	}
 
-	if cfg.ProxyPort < 1 || cfg.ProxyPort > 65535 {
-		return fmt.Errorf("invalid proxy port: %d", cfg.ProxyPort)
+	if cfg.Server.ProxyPort < 1 || cfg.Server.ProxyPort > 65535 {
+		return fmt.Errorf("invalid proxy port: %d", cfg.Server.ProxyPort)
+	}
+	if cfg.Server.AdminGrpcPort < 1 || cfg.Server.AdminGrpcPort > 65535 {
+		return fmt.Errorf("invalid admin grpc port: %d", cfg.Server.AdminGrpcPort)
 	}
 
 	if len(cfg.Backends) == 0 {
 		return fmt.Errorf("no backends configured")
 	}
 
+	backendIDs := make(map[string]struct{}, len(cfg.Backends))
 	backendURLs := make(map[string]struct{}, len(cfg.Backends))
 	enabledBackends := 0
 
 	for _, backend := range cfg.Backends {
 		if backend == nil {
 			return fmt.Errorf("backend config cannot be nil")
+		}
+		if backend.Id == "" {
+			return fmt.Errorf("backend id cannot be empty")
 		}
 		if backend.URL == "" {
 			return fmt.Errorf("backend URL cannot be empty")
@@ -47,6 +54,11 @@ func (v DefaultValidator) Validate(cfg *FullConfig) error {
 		if parsed.Scheme != "http" && parsed.Scheme != "https" {
 			return fmt.Errorf("unsupported backend URL scheme: %s", parsed.Scheme)
 		}
+
+		if _, exists := backendIDs[backend.Id]; exists {
+			return fmt.Errorf("duplicate backend id: %s", backend.Id)
+		}
+		backendIDs[backend.Id] = struct{}{}
 
 		if _, exists := backendURLs[backend.URL]; exists {
 			return fmt.Errorf("duplicate backend URL: %s", backend.URL)
@@ -82,8 +94,8 @@ func (v DefaultValidator) Validate(cfg *FullConfig) error {
 		"least-connections": {},
 	}
 
-	if _, ok := allowedStrategies[cfg.LBStrategy]; !ok {
-		return fmt.Errorf("invalid load balancer strategy: %s", cfg.LBStrategy)
+	if _, ok := allowedStrategies[cfg.LoadBalancer.Strategy]; !ok {
+		return fmt.Errorf("invalid load balancer strategy: %s", cfg.LoadBalancer.Strategy)
 	}
 
 	if cfg.HealthCheck.Path == "" {
@@ -115,6 +127,29 @@ func (v DefaultValidator) Validate(cfg *FullConfig) error {
 	}
 
 	domains := make(map[string]struct{}, len(cfg.VirtualHosts))
+	policyIDs := make(map[string]struct{}, len(cfg.Security.Policies))
+
+	for _, policy := range cfg.Security.Policies {
+		if policy.Id == "" {
+			return fmt.Errorf("security policy id cannot be empty")
+		}
+		if _, exists := policyIDs[policy.Id]; exists {
+			return fmt.Errorf("duplicate security policy id: %s", policy.Id)
+		}
+		policyIDs[policy.Id] = struct{}{}
+
+		if policy.RateLimiting.Enabled {
+			if policy.RateLimiting.RatePerIP <= 0 {
+				return fmt.Errorf("rate_per_ip must be positive for security policy %s", policy.Id)
+			}
+			if policy.RateLimiting.Burst <= 0 {
+				return fmt.Errorf("burst must be positive for security policy %s", policy.Id)
+			}
+			if policy.RateLimiting.WindowSec <= 0 {
+				return fmt.Errorf("window_sec must be positive for security policy %s", policy.Id)
+			}
+		}
+	}
 
 	for _, vhost := range cfg.VirtualHosts {
 		if vhost.Domain == "" {
@@ -125,13 +160,17 @@ func (v DefaultValidator) Validate(cfg *FullConfig) error {
 		}
 		domains[vhost.Domain] = struct{}{}
 
-		if len(vhost.Backends) == 0 && len(vhost.PathRoutes) == 0 {
+		if len(vhost.BackendIDs) == 0 && len(vhost.PathRoutes) == 0 {
 			return fmt.Errorf("virtual host %s must define backends or path routes", vhost.Domain)
 		}
 
-		for _, backendURL := range vhost.Backends {
-			if _, ok := backendURLs[backendURL]; !ok {
-				return fmt.Errorf("virtual host %s references unknown backend: %s", vhost.Domain, backendURL)
+		if _, ok := policyIDs[vhost.SecurityPolicyID]; !ok {
+			return fmt.Errorf("virtual host %s references unknown security policy: %s", vhost.Domain, vhost.SecurityPolicyID)
+		}
+
+		for _, backendID := range vhost.BackendIDs {
+			if _, ok := backendIDs[backendID]; !ok {
+				return fmt.Errorf("virtual host %s references unknown backend: %s", vhost.Domain, backendID)
 			}
 		}
 
@@ -143,23 +182,10 @@ func (v DefaultValidator) Validate(cfg *FullConfig) error {
 				return fmt.Errorf("path route %s on virtual host %s must start with /", route.Path, vhost.Domain)
 			}
 
-			for _, backendURL := range route.Backends {
-				if _, ok := backendURLs[backendURL]; !ok {
-					return fmt.Errorf("path route %s on virtual host %s references unknown backend: %s", route.Path, vhost.Domain, backendURL)
+			for _, backendID := range route.BackendIDs {
+				if _, ok := backendIDs[backendID]; !ok {
+					return fmt.Errorf("path route %s on virtual host %s references unknown backend: %s", route.Path, vhost.Domain, backendID)
 				}
-			}
-		}
-
-		if vhost.Security != nil && vhost.Security.RateLimiting.Enabled {
-			rl := vhost.Security.RateLimiting
-			if rl.RatePerIP <= 0 {
-				return fmt.Errorf("rate_per_ip must be positive for virtual host %s", vhost.Domain)
-			}
-			if rl.Burst <= 0 {
-				return fmt.Errorf("burst must be positive for virtual host %s", vhost.Domain)
-			}
-			if rl.WindowSec <= 0 {
-				return fmt.Errorf("window_sec must be positive for virtual host %s", vhost.Domain)
 			}
 		}
 	}

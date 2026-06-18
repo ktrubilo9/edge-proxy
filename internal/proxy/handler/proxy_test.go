@@ -37,7 +37,7 @@ func newTestRuntime(t *testing.T, fullConfig *config.FullConfig) *runtime.Runtim
 		if backend == nil {
 			continue
 		}
-		status, ok := current.BackendStatus(backend.URL)
+		status, ok := current.BackendStatus(backend.Id)
 		if !ok {
 			t.Fatalf("missing backend status for %s", backend.URL)
 		}
@@ -51,10 +51,15 @@ func newSingleRouteTestRuntime(t *testing.T, host string, backendURL string, rou
 	t.Helper()
 
 	fullConfig := &config.FullConfig{
-		ProxyPort:  8080,
-		LBStrategy: "least-connections",
+		Server: config.ServerConfig{
+			ProxyPort:     8080,
+			AdminGrpcPort: 50051,
+		},
+		LoadBalancer: config.LoadBalancingConfig{
+			Strategy: "least-connections",
+		},
 		Backends: []*config.BackendConfig{
-			{URL: backendURL, Weight: 1, Enabled: true},
+			{Id: "backend", URL: backendURL, Weight: 1, Enabled: true},
 		},
 		HealthCheck: config.HealthCheckConfig{
 			Path:             "/health",
@@ -71,9 +76,9 @@ func newSingleRouteTestRuntime(t *testing.T, host string, backendURL string, rou
 		},
 		VirtualHosts: []config.VirtualHost{
 			{
-				Domain:   host,
-				Backends: []string{backendURL},
-				Security: &config.SecurityConfig{},
+				Domain:           host,
+				BackendIDs:       []string{"backend"},
+				SecurityPolicyID: "default",
 				PathRoutes: func() []config.PathRoute {
 					if route == nil {
 						return nil
@@ -95,7 +100,7 @@ func TestProxyHandlerUnknownHostReturnsForbidden(t *testing.T) {
 	)
 
 	current := rt.State()
-	status, ok := current.BackendStatus("http://127.0.0.1:1")
+	status, ok := current.BackendStatus("backend")
 	if !ok {
 		t.Fatal("missing backend status")
 	}
@@ -164,8 +169,8 @@ func TestProxyHandlerUsesPathRouteBackends(t *testing.T) {
 	defer apiBackend.Close()
 
 	route := &config.PathRoute{
-		Path:     "/api",
-		Backends: []string{apiBackend.URL},
+		Path:       "/api",
+		BackendIDs: []string{"backend"},
 	}
 
 	rt := newSingleRouteTestRuntime(t, "app.local", apiBackend.URL, route)
@@ -196,7 +201,7 @@ func TestProxyHandlerStripsPathPrefixBeforeForwarding(t *testing.T) {
 
 	route := &config.PathRoute{
 		Path:        "/api",
-		Backends:    []string{backend.URL},
+		BackendIDs:  []string{"backend"},
 		StripPrefix: true,
 	}
 
@@ -230,11 +235,16 @@ func TestProxyHandlerPrefersLongestMatchingPathRoute(t *testing.T) {
 	defer v1Backend.Close()
 
 	fullConfig := &config.FullConfig{
-		ProxyPort:  8080,
-		LBStrategy: "least-connections",
+		Server: config.ServerConfig{
+			ProxyPort:     8080,
+			AdminGrpcPort: 50051,
+		},
+		LoadBalancer: config.LoadBalancingConfig{
+			Strategy: "least-connections",
+		},
 		Backends: []*config.BackendConfig{
-			{URL: apiBackend.URL, Weight: 1, Enabled: true},
-			{URL: v1Backend.URL, Weight: 1, Enabled: true},
+			{Id: "api", URL: apiBackend.URL, Weight: 1, Enabled: true},
+			{Id: "api-v1", URL: v1Backend.URL, Weight: 1, Enabled: true},
 		},
 		HealthCheck: config.HealthCheckConfig{
 			Path:             "/health",
@@ -251,12 +261,12 @@ func TestProxyHandlerPrefersLongestMatchingPathRoute(t *testing.T) {
 		},
 		VirtualHosts: []config.VirtualHost{
 			{
-				Domain:   "app.local",
-				Backends: []string{apiBackend.URL},
-				Security: &config.SecurityConfig{},
+				Domain:           "app.local",
+				BackendIDs:       []string{"api"},
+				SecurityPolicyID: "default",
 				PathRoutes: []config.PathRoute{
-					{Path: "/api", Backends: []string{apiBackend.URL}},
-					{Path: "/api/v1", Backends: []string{v1Backend.URL}},
+					{Path: "/api", BackendIDs: []string{"api"}},
+					{Path: "/api/v1", BackendIDs: []string{"api-v1"}},
 				},
 			},
 		},
@@ -317,11 +327,16 @@ func TestProxyHandlerRetriesIdempotentRequestOnAlternateBackend(t *testing.T) {
 	defer healthyBackend.Close()
 
 	fullConfig := &config.FullConfig{
-		ProxyPort:  8080,
-		LBStrategy: "least-connections",
+		Server: config.ServerConfig{
+			ProxyPort:     8080,
+			AdminGrpcPort: 50051,
+		},
+		LoadBalancer: config.LoadBalancingConfig{
+			Strategy: "least-connections",
+		},
 		Backends: []*config.BackendConfig{
-			{URL: "http://127.0.0.1:1", Weight: 1, Enabled: true},
-			{URL: healthyBackend.URL, Weight: 1, Enabled: true},
+			{Id: "dead", URL: "http://127.0.0.1:1", Weight: 1, Enabled: true},
+			{Id: "healthy", URL: healthyBackend.URL, Weight: 1, Enabled: true},
 		},
 		HealthCheck: config.HealthCheckConfig{
 			Path:             "/health",
@@ -338,9 +353,9 @@ func TestProxyHandlerRetriesIdempotentRequestOnAlternateBackend(t *testing.T) {
 		},
 		VirtualHosts: []config.VirtualHost{
 			{
-				Domain:   "app.local",
-				Backends: []string{"http://127.0.0.1:1", healthyBackend.URL},
-				Security: &config.SecurityConfig{},
+				Domain:           "app.local",
+				BackendIDs:       []string{"dead", "healthy"},
+				SecurityPolicyID: "default",
 			},
 		},
 	}

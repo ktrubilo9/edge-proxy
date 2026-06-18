@@ -125,7 +125,7 @@ func (p *Proxy) Start() error {
 	mux.HandleFunc("/metrics", http.NotFound)
 	mux.HandleFunc("/metrics/prometheus", http.NotFound)
 
-	port := strconv.Itoa(p.Runtime.State().Snapshot.Raw.ProxyPort)
+	port := strconv.Itoa(p.Runtime.State().Snapshot.Raw.Server.ProxyPort)
 	p.srv = &http.Server{
 		Addr:              ":" + port,
 		Handler:           mux,

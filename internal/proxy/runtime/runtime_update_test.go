@@ -13,13 +13,15 @@ import (
 func TestApplyUpdatePublishesBackendChangesAtomically(t *testing.T) {
 	rt := newRuntimeUpdateTestInstance(t)
 	previous := rt.State()
-	previousStatus, ok := previous.BackendStatus("http://backend-1")
+	previousStatus, ok := previous.BackendStatus("backend-1")
 	if !ok {
 		t.Fatal("missing initial backend status")
 	}
 
+	addedID := "backend-2"
 	addedURL := "http://backend-2"
 	if err := rt.AddBackend(config.BackendConfig{
+		Id:      addedID,
 		URL:     addedURL,
 		Weight:  1,
 		Enabled: true,
@@ -37,32 +39,32 @@ func TestApplyUpdatePublishesBackendChangesAtomically(t *testing.T) {
 	if current.LoadBalancer != previous.LoadBalancer {
 		t.Fatal("load balancer was replaced by a backend-only update")
 	}
-	if current.Snapshot.BackendsByURL[addedURL] == nil {
+	if current.Snapshot.BackendsById[addedID] == nil {
 		t.Fatal("new backend is missing from the published snapshot")
 	}
 	if rt.Metrics.Backends.Get(addedURL) == nil {
 		t.Fatal("new backend metrics were not registered")
 	}
-	if _, ok := current.BackendStatus(addedURL); !ok {
+	if _, ok := current.BackendStatus(addedID); !ok {
 		t.Fatal("new backend status was not registered")
 	}
 
-	currentStatus, ok := current.BackendStatus("http://backend-1")
+	currentStatus, ok := current.BackendStatus("backend-1")
 	if !ok || currentStatus != previousStatus {
 		t.Fatal("existing backend status was not preserved")
 	}
 
-	if err := rt.RemoveBackend(addedURL); err != nil {
+	if err := rt.RemoveBackend(addedID); err != nil {
 		t.Fatalf("remove backend: %v", err)
 	}
-	if rt.State().Snapshot.BackendsByURL[addedURL] != nil {
+	if rt.State().Snapshot.BackendsById[addedID] != nil {
 		t.Fatal("removed backend is still present in the published snapshot")
 	}
 	if rt.Metrics.Backends.Get(addedURL) != nil {
 		t.Fatal("removed backend metrics are still registered")
 	}
 	current = rt.State()
-	if _, ok := current.BackendStatus(addedURL); ok {
+	if _, ok := current.BackendStatus(addedID); ok {
 		t.Fatal("removed backend status is still registered")
 	}
 }
@@ -73,6 +75,7 @@ func TestApplyUpdateFailureLeavesRuntimeStateUntouched(t *testing.T) {
 	previousMetrics := rt.Metrics.Backends.Get("http://backend-1")
 
 	err := rt.AddBackend(config.BackendConfig{
+		Id:      "backend-1",
 		URL:     "http://backend-1",
 		Weight:  1,
 		Enabled: true,
@@ -92,12 +95,13 @@ func TestApplyUpdateFailureLeavesRuntimeStateUntouched(t *testing.T) {
 func TestOldRuntimeStateRetainsRemovedBackendStatus(t *testing.T) {
 	rt := newRuntimeUpdateTestInstance(t)
 	oldState := rt.State()
-	oldStatus, ok := oldState.BackendStatus("http://backend-1")
+	oldStatus, ok := oldState.BackendStatus("backend-1")
 	if !ok {
 		t.Fatal("old state is missing the initial backend status")
 	}
 
 	if err := rt.AddBackend(config.BackendConfig{
+		Id:      "backend-2",
 		URL:     "http://backend-2",
 		Weight:  1,
 		Enabled: true,
@@ -105,20 +109,20 @@ func TestOldRuntimeStateRetainsRemovedBackendStatus(t *testing.T) {
 		t.Fatalf("add replacement backend: %v", err)
 	}
 	if err := rt.UpdateVirtualHost("app.local", config.VirtualHost{
-		Backends: []string{"http://backend-2"},
-		Security: &config.SecurityConfig{},
+		BackendIDs:       []string{"backend-2"},
+		SecurityPolicyID: "default",
 	}); err != nil {
 		t.Fatalf("switch virtual host to replacement backend: %v", err)
 	}
-	if err := rt.RemoveBackend("http://backend-1"); err != nil {
+	if err := rt.RemoveBackend("backend-1"); err != nil {
 		t.Fatalf("remove initial backend: %v", err)
 	}
 
-	if _, ok := rt.State().BackendStatus("http://backend-1"); ok {
+	if _, ok := rt.State().BackendStatus("backend-1"); ok {
 		t.Fatal("new state contains the removed backend status")
 	}
 
-	retained, ok := oldState.BackendStatus("http://backend-1")
+	retained, ok := oldState.BackendStatus("backend-1")
 	if !ok {
 		t.Fatal("old state lost the removed backend status")
 	}
@@ -137,8 +141,10 @@ func TestApplyUpdateSerializesConcurrentBackendChanges(t *testing.T) {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
+			id := fmt.Sprintf("backend-%d", index+2)
 			url := fmt.Sprintf("http://backend-%d", index+2)
 			errs <- rt.AddBackend(config.BackendConfig{
+				Id:      id,
 				URL:     url,
 				Weight:  1,
 				Enabled: true,
@@ -160,20 +166,21 @@ func TestApplyUpdateSerializesConcurrentBackendChanges(t *testing.T) {
 		t.Fatalf("backend count = %d, want %d", got, want)
 	}
 	for i := 0; i < updates; i++ {
+		id := fmt.Sprintf("backend-%d", i+2)
 		url := fmt.Sprintf("http://backend-%d", i+2)
-		if state.Snapshot.BackendsByURL[url] == nil {
-			t.Fatalf("published snapshot is missing %s", url)
+		if state.Snapshot.BackendsById[id] == nil {
+			t.Fatalf("published snapshot is missing %s", id)
 		}
 		if rt.Metrics.Backends.Get(url) == nil {
 			t.Fatalf("metrics are missing %s", url)
 		}
-		if _, ok := state.BackendStatus(url); !ok {
-			t.Fatalf("status registry is missing %s", url)
+		if _, ok := state.BackendStatus(id); !ok {
+			t.Fatalf("status registry is missing %s", id)
 		}
 	}
 }
 
-func TestRateLimitUpdateDoesNotRequireCallback(t *testing.T) {
+func TestPolicyUpdateDoesNotRequireCallback(t *testing.T) {
 	rt := newRuntimeUpdateTestInstance(t)
 	rate := config.RateLimitingConfig{
 		Enabled:   true,
@@ -182,12 +189,12 @@ func TestRateLimitUpdateDoesNotRequireCallback(t *testing.T) {
 		WindowSec: 60,
 	}
 
-	if err := rt.UpdateVirtualHostRateLimiting("app.local", rate); err != nil {
-		t.Fatalf("update rate limit without callback: %v", err)
+	if err := rt.UpsertPolicy(config.SecurityPolicy{Id: "default", RateLimiting: rate}); err != nil {
+		t.Fatalf("update policy without callback: %v", err)
 	}
 
-	got := rt.GetVirtualHostSecurityConfig("app.local")
-	if got == nil || got.RateLimiting != rate {
+	got := rt.GetVirtualHostSecurity("app.local")
+	if got == nil || got.Policy.RateLimiting != rate {
 		t.Fatal("published runtime state does not contain the rate limit update")
 	}
 }
@@ -196,10 +203,15 @@ func newRuntimeUpdateTestInstance(t *testing.T) *Runtime {
 	t.Helper()
 
 	cfg := config.FullConfig{
-		ProxyPort:  8080,
-		LBStrategy: "least-connections",
+		Server: config.ServerConfig{
+			ProxyPort:     8080,
+			AdminGrpcPort: 50051,
+		},
+		LoadBalancer: config.LoadBalancingConfig{
+			Strategy: "least-connections",
+		},
 		Backends: []*config.BackendConfig{
-			{URL: "http://backend-1", Weight: 1, Enabled: true},
+			{Id: "backend-1", URL: "http://backend-1", Weight: 1, Enabled: true},
 		},
 		HealthCheck: config.HealthCheckConfig{
 			Path:             "/health",
@@ -211,9 +223,9 @@ func newRuntimeUpdateTestInstance(t *testing.T) *Runtime {
 		Timeouts: defaultRuntimeTestTimeouts(),
 		VirtualHosts: []config.VirtualHost{
 			{
-				Domain:   "app.local",
-				Backends: []string{"http://backend-1"},
-				Security: &config.SecurityConfig{},
+				Domain:           "app.local",
+				BackendIDs:       []string{"backend-1"},
+				SecurityPolicyID: "default",
 			},
 		},
 		Logging: config.LoggingConfig{

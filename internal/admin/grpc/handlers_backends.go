@@ -10,16 +10,20 @@ import (
 )
 
 func (s *AdminGRPCServer) AddBackend(ctx context.Context, req *adminpb.AddBackendRequest) (*adminpb.BasicResponse, error) {
+	if req.Id == "" {
+		return fail("id cannot be empty"), nil
+	}
 	if req.Url == "" {
 		return fail("url cannot be empty"), nil
 	}
-	if req.Weight < 0 {
-		return fail("weight cannot be negative"), nil
+	if req.Weight <= 0 {
+		return fail("weight must be positive"), nil
 	}
 	if err := s.Runtime.AddBackend(config.BackendConfig{
+		Id:      req.Id,
 		URL:     req.Url,
 		Weight:  req.Weight,
-		Enabled: true,
+		Enabled: req.Enabled,
 	}); err != nil {
 		return fail(err.Error()), nil
 	}
@@ -27,23 +31,23 @@ func (s *AdminGRPCServer) AddBackend(ctx context.Context, req *adminpb.AddBacken
 }
 
 func (s *AdminGRPCServer) UpdateBackend(ctx context.Context, req *adminpb.UpdateBackendRequest) (*adminpb.BasicResponse, error) {
-	if req.Url == "" {
-		return fail("url cannot be empty"), nil
+	if req.Id == "" {
+		return fail("id cannot be empty"), nil
 	}
-	if req.Weight < 0 {
-		return fail("weight cannot be negative"), nil
+	if req.Weight <= 0 {
+		return fail("weight must be positive"), nil
 	}
-	if err := s.Runtime.UpdateBackend(req.Url, req.Weight, req.Enabled); err != nil {
+	if err := s.Runtime.UpdateBackend(req.Id, req.Url, req.Weight, req.Enabled); err != nil {
 		return fail(err.Error()), nil
 	}
 	return success("Backend updated successfully"), nil
 }
 
 func (s *AdminGRPCServer) RemoveBackend(ctx context.Context, req *adminpb.RemoveBackendRequest) (*adminpb.BasicResponse, error) {
-	if req.Url == "" {
-		return fail("url cannot be empty"), nil
+	if req.Id == "" {
+		return fail("id cannot be empty"), nil
 	}
-	if err := s.Runtime.RemoveBackend(req.Url); err != nil {
+	if err := s.Runtime.RemoveBackend(req.Id); err != nil {
 		return fail(err.Error()), nil
 	}
 	return success("Backend removed successfully"), nil
@@ -59,13 +63,14 @@ func (s *AdminGRPCServer) GetBackends(ctx context.Context, _ *adminpb.Empty) (*a
 }
 
 func (s *AdminGRPCServer) GetBackend(ctx context.Context, req *adminpb.GetBackendRequest) (*adminpb.BackendResponse, error) {
-	backend := s.Runtime.GetBackend(req.Url)
+	backend := s.Runtime.GetBackend(req.Id)
 	if backend == nil {
-		return nil, status.Error(codes.InvalidArgument, "url does not exists")
+		return nil, status.Error(codes.InvalidArgument, "id does not exists")
 	}
 	resp := &adminpb.BackendResponse{
+		Id:         backend.Id,
 		Url:        backend.URL,
-		Weight:     int32(backend.Weight),
+		Weight:     backend.Weight,
 		Enabled:    backend.Enabled,
 		Active:     backend.Active,
 		ErrorCount: backend.ErrorCount,

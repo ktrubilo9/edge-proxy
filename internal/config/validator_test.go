@@ -7,11 +7,16 @@ import (
 
 func validTestConfig() *FullConfig {
 	return &FullConfig{
-		ProxyPort:  8080,
-		LBStrategy: "least-connections",
+		Server: ServerConfig{
+			ProxyPort:     8080,
+			AdminGrpcPort: 50051,
+		},
+		LoadBalancer: LoadBalancingConfig{
+			Strategy: "least-connections",
+		},
 		Backends: []*BackendConfig{
-			{URL: "http://backend-1", Weight: 1, Enabled: true},
-			{URL: "http://backend-2", Weight: 1, Enabled: true},
+			{Id: "backend-1", URL: "http://backend-1", Weight: 1, Enabled: true},
+			{Id: "backend-2", URL: "http://backend-2", Weight: 1, Enabled: true},
 		},
 		HealthCheck: HealthCheckConfig{
 			Path:             "/health",
@@ -26,13 +31,18 @@ func validTestConfig() *FullConfig {
 			KeepAliveTimeoutMs: 1000,
 			IdleConnTimeoutMs:  1000,
 		},
+		Security: SecurityConfig{
+			Policies: []SecurityPolicy{
+				{Id: "default"},
+			},
+		},
 		VirtualHosts: []VirtualHost{
 			{
-				Domain:   "app.local",
-				Backends: []string{"http://backend-1"},
-				Security: &SecurityConfig{},
+				Domain:           "app.local",
+				BackendIDs:       []string{"backend-1"},
+				SecurityPolicyID: "default",
 				PathRoutes: []PathRoute{
-					{Path: "/api", Backends: []string{"http://backend-2"}},
+					{Path: "/api", BackendIDs: []string{"backend-2"}},
 				},
 			},
 		},
@@ -41,7 +51,7 @@ func validTestConfig() *FullConfig {
 
 func TestValidateConfigRejectsUnknownVirtualHostBackend(t *testing.T) {
 	cfg := validTestConfig()
-	cfg.VirtualHosts[0].Backends = []string{"http://missing-backend"}
+	cfg.VirtualHosts[0].BackendIDs = []string{"missing-backend"}
 
 	err := ValidateConfig(cfg)
 	if err == nil {
@@ -54,7 +64,7 @@ func TestValidateConfigRejectsUnknownVirtualHostBackend(t *testing.T) {
 
 func TestValidateConfigRejectsUnknownPathRouteBackend(t *testing.T) {
 	cfg := validTestConfig()
-	cfg.VirtualHosts[0].PathRoutes[0].Backends = []string{"http://missing-backend"}
+	cfg.VirtualHosts[0].PathRoutes[0].BackendIDs = []string{"missing-backend"}
 
 	err := ValidateConfig(cfg)
 	if err == nil {

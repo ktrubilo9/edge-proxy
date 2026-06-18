@@ -57,14 +57,23 @@ func (s *Service) Replace(cfg *FullConfig) error {
 }
 
 func (s *Service) AddBackend(backend BackendConfig) error {
+	if backend.Id == "" {
+		return errors.New("backend id cannot be empty")
+	}
 	if backend.URL == "" {
 		return errors.New("backend url cannot be empty")
 	}
 
 	return s.update(func(next *FullConfig) error {
 		for _, b := range next.Backends {
-			if b != nil && b.URL == backend.URL {
-				return fmt.Errorf("backend already exists: %s", backend.URL)
+			if b == nil {
+				continue
+			}
+			if b.Id == backend.Id {
+				return fmt.Errorf("backend already exists: %s", backend.Id)
+			}
+			if b.URL == backend.URL {
+				return fmt.Errorf("backend url already exists: %s", backend.URL)
 			}
 		}
 
@@ -74,38 +83,41 @@ func (s *Service) AddBackend(backend BackendConfig) error {
 	})
 }
 
-func (s *Service) UpdateBackend(url string, weight int32, enabled bool) error {
-	if url == "" {
-		return errors.New("backend url cannot be empty")
+func (s *Service) UpdateBackend(id string, url string, weight int32, enabled bool) error {
+	if id == "" {
+		return errors.New("backend id cannot be empty")
 	}
 
 	return s.update(func(next *FullConfig) error {
 		for _, b := range next.Backends {
-			if b != nil && b.URL == url {
+			if b != nil && b.Id == id {
+				if url != "" {
+					b.URL = url
+				}
 				b.Weight = weight
 				b.Enabled = enabled
 				return nil
 			}
 		}
-		return fmt.Errorf("backend does not exist in config: %s", url)
+		return fmt.Errorf("backend does not exist in config: %s", id)
 	})
 }
 
-func (s *Service) RemoveBackend(url string) error {
-	if url == "" {
-		return errors.New("backend url cannot be empty")
+func (s *Service) RemoveBackend(id string) error {
+	if id == "" {
+		return errors.New("backend id cannot be empty")
 	}
 
 	return s.update(func(next *FullConfig) error {
 		for idx, b := range next.Backends {
-			if b != nil && b.URL == url {
+			if b != nil && b.Id == id {
 				next.Backends = append(next.Backends[:idx], next.Backends[idx+1:]...)
 
 				for i := range next.VirtualHosts {
 					vh := &next.VirtualHosts[i]
-					vh.Backends = removeString(vh.Backends, url)
+					vh.BackendIDs = removeString(vh.BackendIDs, id)
 					for j := range vh.PathRoutes {
-						vh.PathRoutes[j].Backends = removeString(vh.PathRoutes[j].Backends, url)
+						vh.PathRoutes[j].BackendIDs = removeString(vh.PathRoutes[j].BackendIDs, id)
 					}
 				}
 
@@ -113,7 +125,7 @@ func (s *Service) RemoveBackend(url string) error {
 			}
 		}
 
-		return fmt.Errorf("backend does not exist in config: %s", url)
+		return fmt.Errorf("backend does not exist in config: %s", id)
 	})
 }
 
@@ -129,8 +141,8 @@ func (s *Service) AddVirtualHost(vhost VirtualHost) error {
 			}
 		}
 
-		if vhost.Security == nil {
-			vhost.Security = defaultVirtualHostSecurity()
+		if vhost.SecurityPolicyID == "" {
+			vhost.SecurityPolicyID = "default"
 		}
 
 		next.VirtualHosts = append(next.VirtualHosts, vhost)
@@ -146,8 +158,11 @@ func (s *Service) UpdateVirtualHost(domain string, vhost VirtualHost) error {
 	return s.update(func(next *FullConfig) error {
 		for i := range next.VirtualHosts {
 			if next.VirtualHosts[i].Domain == domain {
-				if vhost.Security == nil {
-					vhost.Security = defaultVirtualHostSecurity()
+				if vhost.SecurityPolicyID == "" {
+					vhost.SecurityPolicyID = next.VirtualHosts[i].SecurityPolicyID
+				}
+				if vhost.SecurityPolicyID == "" {
+					vhost.SecurityPolicyID = "default"
 				}
 				vhost.Domain = domain
 				next.VirtualHosts[i] = vhost
@@ -174,28 +189,63 @@ func (s *Service) RemoveVirtualHost(domain string) error {
 	})
 }
 
-func (s *Service) UpdateGlobal(proxyPort int, strategy string) error {
+func (s *Service) UpdateServer(proxyPort, adminGrpcPort int) error {
 	return s.update(func(next *FullConfig) error {
 		if proxyPort != 0 {
-			next.ProxyPort = proxyPort
+			next.Server.ProxyPort = proxyPort
 		}
-		if strategy != "" {
-			next.LBStrategy = strategy
+		if adminGrpcPort != 0 {
+			next.Server.AdminGrpcPort = adminGrpcPort
 		}
 		return nil
 	})
 }
 
-func (s *Service) UpdateVirtualHostRateLimiting(domain string, rl RateLimitingConfig) error {
+func (s *Service) SetVirtualHostSecurityPolicy(domain string, policyID string) error {
+	if domain == "" {
+		return errors.New("virtual host domain cannot be empty")
+	}
+	if policyID == "" {
+		return errors.New("security policy id cannot be empty")
+	}
+
 	return s.update(func(next *FullConfig) error {
 		for i := range next.VirtualHosts {
 			if next.VirtualHosts[i].Domain == domain {
-				ensureSecurity(&next.VirtualHosts[i])
-				next.VirtualHosts[i].Security.RateLimiting = rl
+				next.VirtualHosts[i].SecurityPolicyID = policyID
 				return nil
 			}
 		}
 		return fmt.Errorf("virtual host does not exist in config: %s", domain)
+	})
+}
+
+func (s *Service) UpsertPolicy(policy SecurityPolicy) error {
+	if policy.Id == "" {
+		return errors.New("security policy id cannot be empty")
+	}
+
+	return s.update(func(next *FullConfig) error {
+		for i := range next.Security.Policies {
+			if next.Security.Policies[i].Id == policy.Id {
+				next.Security.Policies[i] = policy
+				return nil
+			}
+		}
+
+		next.Security.Policies = append(next.Security.Policies, policy)
+		return nil
+	})
+}
+
+func (s *Service) UpdateLoadBalancer(strategy string) error {
+	if strategy == "" {
+		return errors.New("load balancer strategy cannot be empty")
+	}
+
+	return s.update(func(next *FullConfig) error {
+		next.LoadBalancer.Strategy = strategy
+		return nil
 	})
 }
 
@@ -228,18 +278,6 @@ func (s *Service) applyLocked(next *FullConfig) error {
 	s.current = next
 	s.snapshot = BuildSnapshot(next)
 	return nil
-}
-
-func defaultVirtualHostSecurity() *SecurityConfig {
-	return &SecurityConfig{
-		RateLimiting: RateLimitingConfig{},
-	}
-}
-
-func ensureSecurity(vhost *VirtualHost) {
-	if vhost.Security == nil {
-		vhost.Security = defaultVirtualHostSecurity()
-	}
 }
 
 func removeString(items []string, target string) []string {

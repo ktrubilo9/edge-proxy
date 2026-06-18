@@ -142,15 +142,16 @@ Important fields:
 
 | Field | Purpose |
 | --- | --- |
-| `proxy_port` | Public proxy HTTP port |
-| `lb_strategy` | Load-balancing strategy; currently `least-connections` |
-| `backends` | Upstream backend definitions |
-| `virtual_hosts` | Host-based routing policies |
+| `server.proxy_port` | Public proxy HTTP port |
+| `server.admin_grpc_port` | Internal admin gRPC port |
+| `load_balancing.strategy` | Load-balancing strategy; currently `least-connections` |
+| `backends` | Upstream backend definitions with stable `id` values |
+| `virtual_hosts` | Host-based routing policies using `backend_ids` |
 | `path_routes` | Optional path-specific backend selection |
 | `health_check` | Health-check interval, timeout, path, and status codes |
 | `timeouts` | Outbound HTTP transport timeouts |
 | `logging` | Log level and asynchronous logging settings |
-| `security.rate_limiting` | Per-virtual-host rate limiting |
+| `security.policies` | Reusable security policies referenced by `security_policy_id` |
 
 Runtime changes made through the admin API are persisted to the configured JSON
 file. Mount that file as a volume when configuration must survive container
@@ -174,10 +175,13 @@ Main routes:
 
 ```text
 GET|POST             /api/backend
-GET|PUT|DELETE       /api/backend/{url...}
+GET|PUT|DELETE       /api/backend/{id}
 GET|POST             /api/vhost
 GET|PUT|DELETE       /api/vhost/{domain}
 GET|PUT              /api/vhost/{domain}/security
+GET                  /api/security/policies
+PUT                  /api/security/policies/{id}
+GET|PUT              /api/config/server
 GET|PUT              /api/config/lb
 ```
 

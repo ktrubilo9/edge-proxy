@@ -1,15 +1,20 @@
 {
-  "proxy_port": 8080,
-  "lb_strategy": "least-connections",
+  "server": {
+    "proxy_port": 8080,
+    "admin_grpc_port": 50051
+  },
+  "load_balancing": {
+    "strategy": "least-connections"
+  },
   "backends": [
-    { "url": "env:FRONTEND_1_URL", "weight": 1, "enabled": true },
-    { "url": "env:FRONTEND_2_URL", "weight": 1, "enabled": true },
-    { "url": "env:USERS_1_URL", "weight": 2, "enabled": true },
-    { "url": "env:USERS_2_URL", "weight": 2, "enabled": true },
-    { "url": "env:ORDERS_1_URL", "weight": 2, "enabled": true },
-    { "url": "env:ORDERS_2_URL", "weight": 2, "enabled": true },
-    { "url": "env:PAYMENTS_1_URL", "weight": 1, "enabled": true },
-    { "url": "env:PAYMENTS_2_URL", "weight": 1, "enabled": true }
+    { "id": "frontend-1", "url": "env:FRONTEND_1_URL", "weight": 1, "enabled": true },
+    { "id": "frontend-2", "url": "env:FRONTEND_2_URL", "weight": 1, "enabled": true },
+    { "id": "users-1", "url": "env:USERS_1_URL", "weight": 2, "enabled": true },
+    { "id": "users-2", "url": "env:USERS_2_URL", "weight": 2, "enabled": true },
+    { "id": "orders-1", "url": "env:ORDERS_1_URL", "weight": 2, "enabled": true },
+    { "id": "orders-2", "url": "env:ORDERS_2_URL", "weight": 2, "enabled": true },
+    { "id": "payments-1", "url": "env:PAYMENTS_1_URL", "weight": 1, "enabled": true },
+    { "id": "payments-2", "url": "env:PAYMENTS_2_URL", "weight": 1, "enabled": true }
   ],
   "health_check": {
     "path": "/health",
@@ -24,6 +29,19 @@
     "keep_alive_timeout_ms": 30000,
     "idle_conn_timeout_ms": 90000
   },
+  "security": {
+    "policies": [
+      {
+        "id": "shop-public",
+        "rate_limiting": {
+          "enabled": true,
+          "rate_per_ip": 120,
+          "burst": 40,
+          "window_sec": 60
+        }
+      }
+    ]
+  },
   "logging": {
     "enabled": true,
     "level": "info",
@@ -33,32 +51,25 @@
   "virtual_hosts": [
     {
       "domain": "shop.example.local",
-      "backends": ["env:FRONTEND_1_URL", "env:FRONTEND_2_URL"],
+      "backend_ids": ["frontend-1", "frontend-2"],
+      "security_policy_id": "shop-public",
       "path_routes": [
         {
           "path": "/api/users",
-          "backends": ["env:USERS_1_URL", "env:USERS_2_URL"],
+          "backend_ids": ["users-1", "users-2"],
           "strip_prefix": false
         },
         {
           "path": "/api/orders",
-          "backends": ["env:ORDERS_1_URL", "env:ORDERS_2_URL"],
+          "backend_ids": ["orders-1", "orders-2"],
           "strip_prefix": false
         },
         {
           "path": "/api/payments",
-          "backends": ["env:PAYMENTS_1_URL", "env:PAYMENTS_2_URL"],
+          "backend_ids": ["payments-1", "payments-2"],
           "strip_prefix": false
         }
-      ],
-      "security": {
-        "rate_limiting": {
-          "enabled": true,
-          "rate_per_ip": 120,
-          "burst": 40,
-          "window_sec": 60
-        }
-      }
+      ]
     }
   ]
 }

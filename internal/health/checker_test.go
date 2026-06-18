@@ -12,15 +12,21 @@ func newHealthTestChecker(t *testing.T, threshold int32) (*HealthChecker, *confi
 	t.Helper()
 
 	backend := &config.BackendConfig{
+		Id:      "backend-1",
 		URL:     "http://backend-1",
 		Weight:  1,
 		Enabled: true,
 	}
 
 	fullConfig := &config.FullConfig{
-		ProxyPort:  8080,
-		LBStrategy: "least-connections",
-		Backends:   []*config.BackendConfig{backend},
+		Server: config.ServerConfig{
+			ProxyPort:     8080,
+			AdminGrpcPort: 50051,
+		},
+		LoadBalancer: config.LoadBalancingConfig{
+			Strategy: "least-connections",
+		},
+		Backends: []*config.BackendConfig{backend},
 		HealthCheck: config.HealthCheckConfig{
 			Path:             "/health",
 			IntervalSeconds:  1,
@@ -57,7 +63,7 @@ func newHealthTestChecker(t *testing.T, threshold int32) (*HealthChecker, *confi
 		t.Fatalf("create runtime: %v", err)
 	}
 	current := rt.State()
-	status, ok := current.BackendStatus(backend.URL)
+	status, ok := current.BackendStatus(backend.Id)
 	if !ok {
 		t.Fatal("missing backend status")
 	}

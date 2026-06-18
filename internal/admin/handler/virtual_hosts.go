@@ -142,7 +142,7 @@ func HandleSecurityConfigGet(proxyClient adminpb.ProxyAdminClient) http.HandlerF
 		logRequest(r)
 
 		req := &adminpb.GetVirtualHostRequest{Domain: domain}
-		resp, err := proxyClient.GetVirtualHostSecurityConfig(ctx, req)
+		resp, err := proxyClient.GetVirtualHostSecurity(ctx, req)
 		if err != nil {
 			http.Error(w, "Failed to get security config: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -163,23 +163,63 @@ func HandleSecurityConfigUpdate(proxyClient adminpb.ProxyAdminClient) http.Handl
 		defer cancel()
 		logRequest(r)
 
-		var config adminpb.SecurityConfigResponse
-		if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+		var req adminpb.SetVirtualHostSecurityPolicyRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 			return
 		}
+		req.Domain = domain
 
-		req := &adminpb.UpdateSecurityConfigRequest{
-			Domain: domain,
-			Config: &config,
-		}
-		resp, err := proxyClient.UpdateVirtualHostSecurityConfig(ctx, req)
+		resp, err := proxyClient.SetVirtualHostSecurityPolicy(ctx, &req)
 		if err != nil {
 			http.Error(w, "Failed to update security config: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if !resp.Success {
 			http.Error(w, "Failed to update security config: "+resp.Error, http.StatusInternalServerError)
+			return
+		}
+		respondJSON(w, resp)
+	}
+}
+
+func HandlePoliciesList(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		logRequest(r)
+
+		resp, err := proxyClient.GetPolicies(ctx, &adminpb.Empty{})
+		if err != nil {
+			http.Error(w, "Failed to get policies: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		respondJSON(w, resp.Policies)
+	}
+}
+
+func HandlePolicyUpsert(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		logRequest(r)
+
+		var policy adminpb.SecurityPolicy
+		if err := json.NewDecoder(r.Body).Decode(&policy); err != nil {
+			http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if pathID := r.PathValue("id"); pathID != "" {
+			policy.Id = pathID
+		}
+
+		resp, err := proxyClient.UpsertPolicy(ctx, &adminpb.UpsertPolicyRequest{Policy: &policy})
+		if err != nil {
+			http.Error(w, "Failed to upsert policy: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !resp.Success {
+			http.Error(w, "Failed to upsert policy: "+resp.Error, http.StatusInternalServerError)
 			return
 		}
 		respondJSON(w, resp)

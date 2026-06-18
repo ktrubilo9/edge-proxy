@@ -15,16 +15,23 @@ service ProxyAdmin {
     // virtual hosts
     rpc GetVirtualHosts(Empty) returns (GetVirtualHostsResponse);
     rpc GetVirtualHost(GetVirtualHostRequest) returns (VirtualHost);
+    rpc GetVirtualHostSecurity(GetVirtualHostRequest) returns (VirtualHostSecurityResponse);
+    rpc SetVirtualHostSecurityPolicy(SetVirtualHostSecurityPolicyRequest) returns (BasicResponse);
     rpc AddVirtualHost(AddVirtualHostRequest) returns (BasicResponse);
     rpc RemoveVirtualHost(RemoveVirtualHostRequest) returns (BasicResponse);
     rpc UpdateVirtualHost(UpdateVirtualHostRequest) returns (BasicResponse);
 
-    rpc GetVirtualHostSecurityConfig(GetVirtualHostRequest) returns (SecurityConfigResponse);
-    rpc UpdateVirtualHostSecurityConfig(UpdateSecurityConfigRequest) returns (BasicResponse);
+    // server
+    rpc GetServerConfig(Empty) returns (ServerConfig);
+    rpc SetServerConfig(ServerConfig) returns (BasicResponse);
 
-    // global
-    rpc GetGlobalConfig(Empty) returns (GlobalConfig);
-    rpc SetGlobalConfig(GlobalConfig) returns (BasicResponse);
+    // load balancer
+    rpc GetLoadBalancer(Empty) returns (LoadBalancerConfig);
+    rpc SetLoadBalancer(LoadBalancerConfig) returns (BasicResponse);
+
+    // security
+    rpc GetPolicies(Empty) returns (GetPoliciesResponse);
+    rpc UpsertPolicy(UpsertPolicyRequest) returns (BasicResponse);
 
     // metrics
     rpc GetMetrics(Empty) returns (MetricsResponse);
@@ -41,18 +48,20 @@ message BasicResponse {
 // ================= BACKENDS =================
 
 message Backend {
-    string url = 1;
-    int32 weight = 2;
-    bool enabled = 3;
+    string id = 1;
+    string url = 2;
+    int32 weight = 3;
+    bool enabled = 4;
 }
 
 message BackendResponse {
-    string url = 1;
-    int32 weight = 2;
-    bool enabled = 3;
-    bool active = 4;
-    uint32 error_count = 5;
-    string last_error = 6;
+    string id = 1;
+    string url = 2;
+    int32 weight = 3;
+    bool enabled = 4;
+    bool active = 5;
+    uint32 error_count = 6;
+    string last_error = 7;
 }
 
 message GetBackendsResponse {
@@ -60,22 +69,25 @@ message GetBackendsResponse {
 }
 
 message GetBackendRequest {
-    string url = 1;
+    string id = 1;
 }
 
 message AddBackendRequest {
-    string url = 1;
-    int32 weight = 2;
+    string id = 1;
+    string url = 2;
+    int32 weight = 3;
+    bool enabled = 4;
 }
 
 message RemoveBackendRequest {
-    string url = 1;
+    string id = 1;
 }
 
 message UpdateBackendRequest {
-    string url = 1;
-    int32 weight = 2;
-    bool enabled = 3;
+    string id = 1;
+    string url = 2;
+    int32 weight = 3;
+    bool enabled = 4;
 }
 
 // ================= METRICS =================
@@ -108,22 +120,37 @@ message MetricsResponse {
     string uptime = 20;
 }
 
-// ================= GLOBAL =================
+// ================= SERVER =================
 
-message GlobalConfig {
+message ServerConfig {
     int32 proxy_port = 1;
-    string lb_strategy = 2;
+    int32 admin_grpc_port = 2;
+}
+
+// ================= LOAD BALANCER =================
+
+message LoadBalancerConfig {
+    string strategy = 1;
 }
 
 // ================= SECURITY =================
 
-message SecurityConfigResponse {
-    RateLimitingConfig rate_limiting = 1;
+message SetVirtualHostSecurityPolicyRequest {
+    string domain = 1;
+    string policy_id = 2;
 }
 
-message UpdateSecurityConfigRequest {
-    string domain = 1;
-    SecurityConfigResponse config = 2;
+message UpsertPolicyRequest {
+    SecurityPolicy policy = 1;
+}
+
+message GetPoliciesResponse {
+    repeated SecurityPolicy policies = 1;
+}
+
+message SecurityPolicy {
+    string id = 1;
+    RateLimitingConfig rate_limiting = 2;
 }
 
 message RateLimitingConfig {
@@ -145,20 +172,26 @@ message GetVirtualHostRequest {
 
 message PathRoute {
     string path = 1;
-    repeated string backends = 2;
+    repeated string backend_ids = 2;
     bool strip_prefix = 3;
     string rewrite = 4;
 }
 
 message VirtualHost {
     string domain = 1;
-    repeated string backends = 2;
+    repeated string backend_ids = 2;
     repeated PathRoute path_routes = 3;
-    SecurityConfigResponse security_config = 4;
+    string security_policy_id = 4;
+}
+
+message VirtualHostSecurityResponse {
+    string domain = 1;
+    string security_policy_id = 2;
+    SecurityPolicy policy = 3;
 }
 
 message AddVirtualHostRequest {
-    VirtualHost vhost = 1;
+    VirtualHost virtual_host = 1;
 }
 
 message RemoveVirtualHostRequest {
@@ -167,5 +200,5 @@ message RemoveVirtualHostRequest {
 
 message UpdateVirtualHostRequest {
     string domain = 1;
-    VirtualHost vhost = 2;
+    VirtualHost virtual_host = 2;
 }
