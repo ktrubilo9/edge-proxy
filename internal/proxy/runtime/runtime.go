@@ -5,6 +5,7 @@ import (
 	"edge-proxy/internal/lb"
 	"edge-proxy/internal/logger"
 	"edge-proxy/internal/metrics"
+	"edge-proxy/internal/view"
 	"net"
 	"net/http"
 	"sync"
@@ -92,19 +93,19 @@ func (state *RuntimeState) BackendStatus(url string) (*BackendStatus, bool) {
 	return status, ok
 }
 
-func (state *RuntimeState) Backends() []config.BackendResponse {
+func (state *RuntimeState) Backends() []view.BackendResponse {
 	if state == nil || state.Snapshot == nil || state.Snapshot.Raw == nil {
 		return nil
 	}
 
 	backends := state.Snapshot.Raw.Backends
-	resp := make([]config.BackendResponse, 0, len(backends))
+	resp := make([]view.BackendResponse, 0, len(backends))
 	for _, backend := range backends {
 		if backend == nil {
 			continue
 		}
 
-		item := config.BackendResponse{
+		item := view.BackendResponse{
 			URL:     backend.URL,
 			Weight:  backend.Weight,
 			Enabled: backend.Enabled,
@@ -121,7 +122,7 @@ func (state *RuntimeState) Backends() []config.BackendResponse {
 	return resp
 }
 
-func (state *RuntimeState) Backend(url string) *config.BackendResponse {
+func (state *RuntimeState) Backend(url string) *view.BackendResponse {
 	if state == nil || state.Snapshot == nil {
 		return nil
 	}
@@ -131,7 +132,7 @@ func (state *RuntimeState) Backend(url string) *config.BackendResponse {
 		return nil
 	}
 
-	resp := &config.BackendResponse{
+	resp := &view.BackendResponse{
 		URL:     backend.URL,
 		Weight:  backend.Weight,
 		Enabled: backend.Enabled,
@@ -302,11 +303,11 @@ func (rt *Runtime) UpdateBackend(url string, weight int32, enabled bool) error {
 	})
 }
 
-func (rt *Runtime) GetBackends() []config.BackendResponse {
+func (rt *Runtime) GetBackends() []view.BackendResponse {
 	return rt.State().Backends()
 }
 
-func (rt *Runtime) GetBackend(url string) *config.BackendResponse {
+func (rt *Runtime) GetBackend(url string) *view.BackendResponse {
 	return rt.State().Backend(url)
 }
 
@@ -316,19 +317,19 @@ func (rt *Runtime) UpdateGlobalConfig(proxyPort int32, strategy string) error {
 	})
 }
 
-func (rt *Runtime) GetGlobalConfig() config.GlobalConfigResponse {
+func (rt *Runtime) GetGlobalConfig() view.GlobalConfigResponse {
 	raw := rt.State().Snapshot.Raw
-	return config.GlobalConfigResponse{
+	return view.GlobalConfigResponse{
 		ProxyPort:  raw.ProxyPort,
 		LBStrategy: raw.LBStrategy,
 	}
 }
 
-func (rt *Runtime) GetVirtualHosts() []config.VirtualHostResponse {
+func (rt *Runtime) GetVirtualHosts() []view.VirtualHostResponse {
 	virtualHosts := rt.State().Snapshot.Raw.VirtualHosts
-	resp := make([]config.VirtualHostResponse, 0, len(virtualHosts))
+	resp := make([]view.VirtualHostResponse, 0, len(virtualHosts))
 	for _, v := range virtualHosts {
-		resp = append(resp, config.VirtualHostResponse{
+		resp = append(resp, view.VirtualHostResponse{
 			Domain:     v.Domain,
 			Backends:   append([]string(nil), v.Backends...),
 			PathRoutes: append([]config.PathRoute(nil), v.PathRoutes...),
@@ -350,7 +351,7 @@ func (rt *Runtime) RemoveVirtualHost(domain string) error {
 	})
 }
 
-func (rt *Runtime) GetSecurityConfigHost(host string) config.SecurityConfigResponse {
+func (rt *Runtime) GetSecurityConfigHost(host string) view.SecurityConfigResponse {
 	if idx := len(host); idx > 0 {
 		for i, c := range host {
 			if c == ':' {
@@ -363,10 +364,10 @@ func (rt *Runtime) GetSecurityConfigHost(host string) config.SecurityConfigRespo
 
 	vhost := rt.State().Snapshot.VHostsByDomain[host]
 	if vhost == nil || vhost.Security == nil {
-		return config.SecurityConfigResponse{}
+		return view.SecurityConfigResponse{}
 	}
 
-	return config.SecurityConfigResponse{
+	return view.SecurityConfigResponse{
 		RateLimiting: vhost.Security.RateLimiting,
 	}
 }
@@ -400,25 +401,25 @@ func (rt *Runtime) UpdateVirtualHostRateLimiting(domain string, rate config.Rate
 	return nil
 }
 
-func (rt *Runtime) GetVirtualHostSecurityConfig(domain string) *config.SecurityConfigResponse {
+func (rt *Runtime) GetVirtualHostSecurityConfig(domain string) *view.SecurityConfigResponse {
 	vhost := rt.State().Snapshot.VHostsByDomain[domain]
 	if vhost == nil || vhost.Security == nil {
 		return nil
 	}
 
-	resp := config.SecurityConfigResponse{
+	resp := view.SecurityConfigResponse{
 		RateLimiting: vhost.Security.RateLimiting,
 	}
 	return &resp
 }
 
-func (rt *Runtime) GetVirtualHost(host string) *config.VirtualHostResponse {
+func (rt *Runtime) GetVirtualHost(host string) *view.VirtualHostResponse {
 	vhost := rt.State().Snapshot.VHostsByDomain[host]
 	if vhost == nil {
 		return nil
 	}
 
-	return &config.VirtualHostResponse{
+	return &view.VirtualHostResponse{
 		Domain:     vhost.Domain,
 		Backends:   append([]string(nil), vhost.Backends...),
 		PathRoutes: append([]config.PathRoute(nil), vhost.PathRoutes...),

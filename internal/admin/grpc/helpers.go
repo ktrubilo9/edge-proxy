@@ -4,6 +4,7 @@ import (
 	"edge-proxy/internal/api/adminpb"
 	"edge-proxy/internal/config"
 	"edge-proxy/internal/proxy/runtime"
+	"edge-proxy/internal/view"
 )
 
 type AdminGRPCServer struct {
@@ -11,7 +12,7 @@ type AdminGRPCServer struct {
 	Runtime *runtime.Runtime
 }
 
-func backendToPB(b config.BackendResponse) *adminpb.BackendResponse {
+func backendToPB(b view.BackendResponse) *adminpb.BackendResponse {
 	return &adminpb.BackendResponse{
 		Url:        b.URL,
 		Weight:     b.Weight,
@@ -40,7 +41,7 @@ func RateLimitingFromPB(pb *adminpb.RateLimitingConfig) config.RateLimitingConfi
 	}
 }
 
-func VhostToPB(v config.VirtualHostResponse) *adminpb.VirtualHost {
+func VhostToPB(v view.VirtualHostResponse) *adminpb.VirtualHost {
 	backends := append([]string(nil), v.Backends...)
 	pathRoutes := make([]*adminpb.PathRoute, 0, len(v.PathRoutes))
 	for _, route := range v.PathRoutes {

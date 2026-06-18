@@ -1,14 +1,14 @@
 package metrics
 
 import (
-	"edge-proxy/internal/config"
+	"edge-proxy/internal/view"
 	"sync/atomic"
 	"time"
 )
 
-func (m *Metrics) ToSystemMetricsResponse() config.SystemMetricsResponse {
+func (m *Metrics) ToSystemMetricsResponse() view.SystemMetricsResponse {
 
-	return config.SystemMetricsResponse{
+	return view.SystemMetricsResponse{
 		Timestamp:     time.Now(),
 		Goroutines:    atomic.LoadUint64(&m.Proxy.GoroutineCount),
 		MemoryPercent: m.Proxy.MemoryPercent,
@@ -16,13 +16,13 @@ func (m *Metrics) ToSystemMetricsResponse() config.SystemMetricsResponse {
 	}
 }
 
-func (m *Metrics) ToBackendMetricsResponse(url string) config.BackendMetricsResponse {
+func (m *Metrics) ToBackendMetricsResponse(url string) view.BackendMetricsResponse {
 	bm := m.Backends.Get(url)
 	if bm == nil {
-		return config.BackendMetricsResponse{URL: url}
+		return view.BackendMetricsResponse{URL: url}
 	}
 
-	return config.BackendMetricsResponse{
+	return view.BackendMetricsResponse{
 		URL:                url,
 		Requests:           atomic.LoadUint64(&bm.Requests),
 		Failures:           atomic.LoadUint64(&bm.Failures),
@@ -37,26 +37,26 @@ func (m *Metrics) ToBackendMetricsResponse(url string) config.BackendMetricsResp
 	}
 }
 
-func (m *Metrics) ToAllBackendsResponse() config.BackendsMetricsResponse {
-	backends := []config.BackendMetricsResponse{}
+func (m *Metrics) ToAllBackendsResponse() view.BackendsMetricsResponse {
+	backends := []view.BackendMetricsResponse{}
 	m.Backends.Range(func(url string, _ *BackendMetrics) bool {
 		backends = append(backends, m.ToBackendMetricsResponse(url))
 		return true
 	})
-	return config.BackendsMetricsResponse{
+	return view.BackendsMetricsResponse{
 		Timestamp: time.Now(),
 		Backends:  backends,
 	}
 }
 
-func (m *Metrics) ToSecurityMetricsResponse() config.SecurityMetricsResponse {
-	return config.SecurityMetricsResponse{
+func (m *Metrics) ToSecurityMetricsResponse() view.SecurityMetricsResponse {
+	return view.SecurityMetricsResponse{
 		AllowedRequests: atomic.LoadUint64(&m.Security.RateLimitStats.AllowedRequests),
 		BlockedRequests: atomic.LoadUint64(&m.Security.RateLimitStats.BlockedRequests),
 	}
 }
 
-func (m *Metrics) ToHTTPMetricsResponse() config.HTTPMetricsResponse {
+func (m *Metrics) ToHTTPMetricsResponse() view.HTTPMetricsResponse {
 	m.HTTP.StatusCodes.mu.RLock()
 	m.HTTP.MethodsCount.mu.RLock()
 	defer m.HTTP.StatusCodes.mu.RUnlock()
@@ -72,7 +72,7 @@ func (m *Metrics) ToHTTPMetricsResponse() config.HTTPMetricsResponse {
 		methods[k] = v
 	}
 
-	return config.HTTPMetricsResponse{
+	return view.HTTPMetricsResponse{
 		TotalRequestSize:  atomic.LoadUint64(&m.HTTP.RequestSizeTotal),
 		TotalResponseSize: atomic.LoadUint64(&m.HTTP.ResponseSizeTotal),
 		StatusCodes:       statusCodes,
