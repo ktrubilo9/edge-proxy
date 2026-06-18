@@ -1,67 +1,98 @@
 # Edge Proxy
 
-Edge Proxy is a Go-based reverse proxy and small edge-gateway project built around the core concerns of routing, runtime configuration, health checking, rate limiting, and observability. It is organized as a single Go module with separate command entry points and internal packages for the proxy runtime, admin APIs, metrics, configuration, and middleware.
+[![CI](https://github.com/ktrubilo9/edge-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/ktrubilo9/edge-proxy/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Project status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)](#project-status)
 
-The project is intentionally scoped as an engineering/learning system, not as a replacement for mature production proxies such as NGINX, Traefik, Envoy, or HAProxy. Its value is in showing how the main building blocks of such a system fit together in code: request routing, backend state, configuration updates, admin control, and operational visibility.
+Edge Proxy is an experimental, runtime-configurable edge security gateway written
+in Go. It combines reverse proxy routing, atomic configuration updates, backend
+health tracking, rate limiting, and Prometheus observability in a compact
+codebase intended for research, learning, and open-source collaboration.
 
-## Features
+The long-term direction is a security-focused gateway with explainable adaptive
+load balancing.
 
-- Host-based reverse proxy routing with virtual hosts.
-- Path-based routing with optional prefix stripping.
+## Why Edge Proxy?
+
+The project focuses on two areas that are useful to explore together:
+
+- runtime security policies that can be updated without restarting the proxy;
+- adaptive traffic distribution driven by measured backend behavior.
+
+The current runtime publishes validated configuration snapshots atomically.
+Requests either use the previous complete state or the next complete state,
+without observing a partially applied update.
+
+## Current Features
+
+- Host-based and path-based reverse proxy routing.
+- Optional path-prefix stripping.
 - Least-connections load balancing.
-- Backend health checks with active/inactive status tracking.
-- Authenticated runtime configuration updates through an admin HTTP API backed by gRPC.
+- Active backend health checks and runtime backend status tracking.
+- Authenticated HTTP admin API backed by an authenticated gRPC control plane.
+- Atomic runtime configuration updates.
 - Per-virtual-host rate limiting.
-- Request IDs and forwarded headers for better traceability.
-- Prometheus metrics endpoint and provisioned Grafana dashboard.
-- Docker Compose setup with two mock backend services.
+- Trusted-proxy-aware client IP resolution.
+- Request IDs and forwarded request metadata.
+- One retry on an alternate backend for retryable requests.
+- Prometheus metrics and a provisioned Grafana dashboard.
+- Docker Compose development environment with two mock backends.
 
-## Project Scope
+## Planned Direction
 
-This repository demonstrates a complete but deliberately compact proxy system:
+The next development milestones focus on:
 
-- a reverse proxy process that serves traffic and exposes health/metrics endpoints;
-- an admin HTTP API process that communicates with the proxy through gRPC;
-- file-backed configuration with validation and runtime refresh;
-- active backend health checks and in-memory backend state;
-- Prometheus metrics and a provisioned Grafana dashboard;
-- Docker Compose infrastructure for local development and demos.
+1. adaptive load balancing based on latency EWMA, error rate, active
+   connections, backend health, and recovery behavior;
+2. per-virtual-host IP allowlists and denylists;
+3. configurable request size, URL, and header limits;
+4. structured security decision logs;
+5. JWT/OIDC authentication and authorization;
+6. Coraza and OWASP Core Rule Set integration;
+7. configuration schema versioning, JSON validation, and optional YAML support.
 
-It does not currently include production-grade concerns such as TLS termination,
-fine-grained admin authorization, encrypted or mutually authenticated gRPC,
-distributed configuration storage, hot reload across multiple proxy instances,
-advanced load-balancing policies, WAF rules, or service discovery.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for ways to participate.
 
 ## Architecture
 
-```text
-cmd/
-  admin-api/        HTTP API for managing proxy configuration
-  mock-backend/     Demo backend used by docker-compose
-  reverse-proxy/    Main reverse proxy process
-
-internal/
-  admin/            REST handlers and gRPC admin server/client
-  api/              Protocol Buffers definition and generated Go code
-  config/           Config loading, defaults, validation, snapshots, storage
-  health/           Backend health checking
-  lb/               Load balancing strategies
-  logger/           Structured logging helpers
-  metrics/          Runtime, HTTP, backend, and Prometheus metrics
-  middleware/       HTTP middleware chain and rate limiting
-  proxy/            Proxy orchestration, runtime state, and request handlers
-  ratelimit/        Rate limiter implementation
-
-configs/            Default and example proxy configurations
-deploy/             Dockerfiles, Prometheus, and Grafana provisioning
+```mermaid
+flowchart LR
+    Client["Client"] --> Proxy["Reverse proxy"]
+    Admin["Admin HTTP API"] --> GRPC["Authenticated gRPC control plane"]
+    GRPC --> Runtime["Atomic runtime state"]
+    Runtime --> Proxy
+    Proxy --> LB["Load balancer"]
+    LB --> A["Backend A"]
+    LB --> B["Backend B"]
+    Health["Health checker"] --> A
+    Health --> B
+    Proxy --> Metrics["Prometheus metrics"]
+    Metrics --> Grafana["Grafana"]
 ```
 
-## Requirements
+```text
+cmd/
+  admin-api/        HTTP API for runtime configuration
+  mock-backend/     Demo backend used by Docker Compose
+  reverse-proxy/    Main proxy process
 
-- Go 1.25 or newer, matching `go.mod`.
-- Docker and Docker Compose for the full local stack.
+internal/
+  admin/            HTTP handlers and gRPC control plane
+  api/              Protocol Buffers definition and generated Go code
+  config/           Loading, validation, persistence, and snapshots
+  health/           Backend health checking
+  lb/               Load-balancing strategies
+  metrics/          Runtime and Prometheus metrics
+  middleware/       Request middleware and client IP resolution
+  proxy/            Proxy runtime, orchestration, and handlers
+```
 
 ## Quick Start
+
+Requirements:
+
+- Go 1.25 or newer, matching `go.mod`;
+- Docker and Docker Compose for the complete local stack.
 
 Create a local environment file:
 
@@ -69,92 +100,65 @@ Create a local environment file:
 cp .env.example .env
 ```
 
-Start the full stack:
+Replace the example secrets in `.env`, then start the stack:
 
 ```bash
 docker compose up --build
 ```
 
-The compose stack starts:
+The stack exposes:
 
-- reverse proxy on `http://localhost:8080`
-- admin API on `http://localhost:8081`
-- Prometheus on `http://localhost:9090`
-- Grafana on `http://localhost:3000`
-- two mock backend services inside the Docker network
+| Service | Address |
+| --- | --- |
+| Reverse proxy | `http://localhost:8080` |
+| Admin API | `http://localhost:8081` |
+| Prometheus | `http://localhost:9090` |
+| Grafana | `http://localhost:3000` |
 
-The default config routes traffic by the `Host` header, so test the proxy with:
+Send a request through the configured virtual host:
 
 ```bash
 curl -H "Host: app.example.local" http://localhost:8080/
 ```
 
-Backends are marked active by the health checker. Immediately after startup, the proxy may briefly return `503` until the first health check succeeds.
-
-The public proxy port exposes only a minimal health response:
-
-```bash
-curl http://localhost:8080/health
-```
-
-Detailed health and metrics endpoints listen on the internal operational address
-`reverse-proxy:9091` in Docker Compose. The port is not published to the host;
-Prometheus scrapes `/metrics/prometheus` over the Compose network.
+Backends may remain unavailable briefly until the first health check succeeds.
 
 ## Configuration
 
-The default proxy config is stored in `configs/config.json`. Additional examples are available in `configs/examples/`.
+The default configuration is stored in `configs/config.json`. Additional
+examples are available in `configs/examples/`.
 
-Values prefixed with `env:` are resolved from environment variables when the proxy loads the config:
-
-```json
-{ "url": "env:BACKEND1_URL", "weight": 1, "enabled": true }
-```
-
-Runtime updates made through the admin API are saved back to the configured JSON file. In the default Docker image, that file is inside the container, so changes are useful for local demos but should not be treated as durable configuration unless the config file is mounted as a volume.
-
-Important fields:
-
-- `proxy_port` - HTTP port used by the reverse proxy.
-- `lb_strategy` - load balancing strategy. Currently supported: `least-connections`.
-- `backends` - upstream backend URLs. Values can reference environment variables with `env:VARIABLE_NAME`.
-- `virtual_hosts` - host-based routing rules.
-- `path_routes` - optional path-specific routing rules inside a virtual host.
-- `health_check` - backend health check path, interval, timeout, and expected status codes.
-- `timeouts` - outbound HTTP client timeout settings.
-- `logging` - log level and async logging options.
-- `security.rate_limiting` - per-host rate limiting configuration.
-
-Example virtual host:
+Values prefixed with `env:` are resolved from environment variables:
 
 ```json
 {
-  "domain": "app.example.local",
-  "backends": ["env:BACKEND1_URL", "env:BACKEND2_URL"],
-  "path_routes": [
-    {
-      "path": "/api",
-      "backends": ["env:BACKEND2_URL"]
-    }
-  ],
-  "security": {
-    "rate_limiting": {
-      "enabled": false,
-      "rate_per_ip": 100,
-      "burst": 50,
-      "window_sec": 60
-    }
-  }
+  "url": "env:BACKEND1_URL",
+  "weight": 1,
+  "enabled": true
 }
 ```
 
+Important fields:
+
+| Field | Purpose |
+| --- | --- |
+| `proxy_port` | Public proxy HTTP port |
+| `lb_strategy` | Load-balancing strategy; currently `least-connections` |
+| `backends` | Upstream backend definitions |
+| `virtual_hosts` | Host-based routing policies |
+| `path_routes` | Optional path-specific backend selection |
+| `health_check` | Health-check interval, timeout, path, and status codes |
+| `timeouts` | Outbound HTTP transport timeouts |
+| `logging` | Log level and asynchronous logging settings |
+| `security.rate_limiting` | Per-virtual-host rate limiting |
+
+Runtime changes made through the admin API are persisted to the configured JSON
+file. Mount that file as a volume when configuration must survive container
+replacement.
+
 ## Admin API
 
-The admin API listens on `:8081` in Docker Compose and communicates with the
-proxy through a token-authenticated internal gRPC control plane. The current
-gRPC transport is not encrypted and must remain on a trusted private network.
-Copy `.env.example`
-to `.env` and replace both example tokens before starting the stack:
+Authentication is enabled by default. Configure separate HTTP and gRPC tokens:
 
 ```dotenv
 ADMIN_AUTH_ENABLED=true
@@ -162,29 +166,19 @@ ADMIN_API_TOKEN=replace-with-a-random-value
 ADMIN_GRPC_TOKEN=replace-with-another-random-value
 ```
 
-Authentication is enabled by default. Set `ADMIN_AUTH_ENABLED=false` only for
-isolated local development. The gRPC token is always required.
+Set `ADMIN_AUTH_ENABLED=false` only in an isolated local environment. The gRPC
+token is always required, and the unencrypted gRPC transport must remain on a
+trusted private network.
 
-Available HTTP routes:
+Main routes:
 
 ```text
-GET    /api/backend
-POST   /api/backend
-GET    /api/backend/{url...}
-PUT    /api/backend/{url...}
-DELETE /api/backend/{url...}
-
-GET    /api/vhost
-POST   /api/vhost
-GET    /api/vhost/{domain}
-PUT    /api/vhost/{domain}
-DELETE /api/vhost/{domain}
-
-GET    /api/vhost/{domain}/security
-PUT    /api/vhost/{domain}/security
-
-GET    /api/config/lb
-PUT    /api/config/lb
+GET|POST             /api/backend
+GET|PUT|DELETE       /api/backend/{url...}
+GET|POST             /api/vhost
+GET|PUT|DELETE       /api/vhost/{domain}
+GET|PUT              /api/vhost/{domain}/security
+GET|PUT              /api/config/lb
 ```
 
 Example:
@@ -194,56 +188,24 @@ curl http://localhost:8081/api/backend \
   -H "Authorization: Bearer $ADMIN_API_TOKEN"
 ```
 
-Add a backend:
-
-```bash
-curl -X POST http://localhost:8081/api/backend \
-  -H "Authorization: Bearer $ADMIN_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"url":"http://backend-c:3000","weight":1}'
-```
-
-Add a virtual host:
-
-```bash
-curl -X POST http://localhost:8081/api/vhost \
-  -H "Authorization: Bearer $ADMIN_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "vhost": {
-      "domain": "api.example.local",
-      "backends": ["http://backend-c:3000"],
-      "security_config": {
-        "rate_limiting": {
-          "enabled": true,
-          "rate_per_ip": 60,
-          "burst": 20,
-          "window_sec": 60
-        }
-      }
-    }
-  }'
-```
-
 ## Observability
 
-Prometheus scrapes the proxy from:
+Prometheus scrapes the internal operational endpoint:
 
 ```text
 http://reverse-proxy:9091/metrics/prometheus
 ```
 
-Grafana is provisioned with a datasource and dashboard from `deploy/grafana/`. The default local admin password is configured through `GF_PASSWORD` in `.env`.
+The public proxy port exposes only a minimal `/health` response. Detailed
+operational endpoints are kept on the internal `OPS_ADDR`.
 
-The proxy exports its own HTTP, backend, rate-limit, and resource metrics. Backend CPU and memory panels are populated when upstream services expose the demo `/admin/metrics` endpoint; the included mock backends do this.
-
-When the proxy runs behind another reverse proxy, configure
-`TRUSTED_PROXY_CIDRS` with only that proxy's network ranges. Forwarded client IP
-headers are ignored for all other peers.
+When another proxy is placed in front of Edge Proxy, configure
+`TRUSTED_PROXY_CIDRS` with only its network ranges. Forwarded client IP headers
+from other peers are ignored.
 
 ## Development
 
-Run quality checks:
+Run the complete quality suite:
 
 ```bash
 gofmt -l .
@@ -252,28 +214,32 @@ go test ./...
 go test -race ./...
 ```
 
-Run the reverse proxy directly:
+Run the proxy outside Docker:
 
 ```bash
 go run ./cmd/reverse-proxy
 ```
 
-When running outside Docker, provide backend URLs through the environment or adjust `configs/config.json`:
-
-```bash
-BACKEND1_URL=http://localhost:3000 BACKEND2_URL=http://localhost:3001 go run ./cmd/reverse-proxy
-```
-
 ## Project Status
 
-This repository focuses on the backend proxy runtime, admin API, configuration management, and observability stack. It is suitable for local experimentation, engineering-thesis demonstrations, and further development.
+Edge Proxy is **pre-alpha**. It is suitable for local experiments, education,
+benchmarking, and collaborative development. It has not completed a security
+audit and should not be presented as a production-ready security boundary.
 
-The codebase is intentionally smaller and simpler than a production proxy platform. Before any real deployment, review network exposure, authentication for admin APIs, TLS termination, persistent configuration, operational limits, and deployment-specific hardening.
+The project originated from an engineering thesis. The current repository is a
+substantial refactor with a consolidated Go module, immutable configuration
+snapshots, atomic runtime publication, a backend state registry, and a hardened
+control plane. Historical adaptive load-balancing experiments will be
+reproduced against this architecture.
 
-## Academic Context
+## Contributing and Security
 
-An earlier version of this project was developed and described as part of an engineering thesis. This repository contains a refactored public version with a consolidated Go module layout and updated documentation.
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+- Use [GitHub Issues](https://github.com/ktrubilo9/edge-proxy/issues) for bugs
+  and feature proposals.
+- Report vulnerabilities according to [SECURITY.md](SECURITY.md), not through a
+  public issue.
 
 ## License
 
-This project is licensed under the MIT License. See `LICENSE` for details.
+Edge Proxy is available under the [MIT License](LICENSE).
