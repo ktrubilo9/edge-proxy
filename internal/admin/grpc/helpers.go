@@ -4,6 +4,7 @@ import (
 	"edge-proxy/internal/api/adminpb"
 	"edge-proxy/internal/config"
 	"edge-proxy/internal/proxy/runtime"
+	"edge-proxy/internal/view"
 )
 
 type AdminGRPCServer struct {
@@ -11,8 +12,9 @@ type AdminGRPCServer struct {
 	Runtime *runtime.Runtime
 }
 
-func backendToPB(b config.BackendResponse) *adminpb.BackendResponse {
+func backendToPB(b view.BackendResponse) *adminpb.BackendResponse {
 	return &adminpb.BackendResponse{
+		Id:         b.Id,
 		Url:        b.URL,
 		Weight:     b.Weight,
 		Enabled:    b.Enabled,
@@ -25,13 +27,17 @@ func backendToPB(b config.BackendResponse) *adminpb.BackendResponse {
 func RateLimitingToPB(r config.RateLimitingConfig) *adminpb.RateLimitingConfig {
 	return &adminpb.RateLimitingConfig{
 		Enabled:   r.Enabled,
-		RatePerIp: int32(r.RatePerIP),
-		Burst:     int32(r.Burst),
-		WindowSec: int32(r.WindowSec),
+		RatePerIp: r.RatePerIP,
+		Burst:     r.Burst,
+		WindowSec: r.WindowSec,
 	}
 }
 
 func RateLimitingFromPB(pb *adminpb.RateLimitingConfig) config.RateLimitingConfig {
+	if pb == nil {
+		return config.RateLimitingConfig{}
+	}
+
 	return config.RateLimitingConfig{
 		Enabled:   pb.Enabled,
 		RatePerIP: pb.RatePerIp,
@@ -40,75 +46,92 @@ func RateLimitingFromPB(pb *adminpb.RateLimitingConfig) config.RateLimitingConfi
 	}
 }
 
-func VhostToPB(v config.VirtualHostResponse) *adminpb.VirtualHost {
-	backends := append([]string(nil), v.Backends...)
+func VhostToPB(v view.VirtualHostResponse) *adminpb.VirtualHost {
 	pathRoutes := make([]*adminpb.PathRoute, 0, len(v.PathRoutes))
 	for _, route := range v.PathRoutes {
 		pathRoutes = append(pathRoutes, &adminpb.PathRoute{
 			Path:        route.Path,
-			Backends:    route.Backends,
+			BackendIds:  append([]string(nil), route.BackendIDs...),
 			StripPrefix: route.StripPrefix,
 		})
 	}
 
 	return &adminpb.VirtualHost{
-		Domain:         v.Domain,
-		Backends:       backends,
-		PathRoutes:     pathRoutes,
-		SecurityConfig: SecurityToPB(v.Security),
+		Domain:           v.Domain,
+		BackendIds:       append([]string(nil), v.BackendIDs...),
+		PathRoutes:       pathRoutes,
+		SecurityPolicyId: v.SecurityPolicyID,
 	}
 }
 
 func VhostFromPB(pb *adminpb.VirtualHost) config.VirtualHost {
-	backends := append([]string(nil), pb.Backends...)
+	if pb == nil {
+		return config.VirtualHost{}
+	}
 
 	pathRoutes := make([]config.PathRoute, 0, len(pb.PathRoutes))
 	for _, route := range pb.PathRoutes {
 		pathRoutes = append(pathRoutes, config.PathRoute{
 			Path:        route.Path,
-			Backends:    route.Backends,
+			BackendIDs:  append([]string(nil), route.BackendIds...),
 			StripPrefix: route.StripPrefix,
 		})
 	}
 
-	var security *config.SecurityConfig
-	if pb.SecurityConfig != nil {
-		var rateLimiting config.RateLimitingConfig
-		if pb.SecurityConfig.RateLimiting != nil {
-			rateLimiting = config.RateLimitingConfig{
-				Enabled:   pb.SecurityConfig.RateLimiting.Enabled,
-				RatePerIP: pb.SecurityConfig.RateLimiting.RatePerIp,
-				Burst:     pb.SecurityConfig.RateLimiting.Burst,
-				WindowSec: pb.SecurityConfig.RateLimiting.WindowSec,
-			}
-		}
-		security = &config.SecurityConfig{
-			RateLimiting: rateLimiting,
-		}
-	}
-
 	return config.VirtualHost{
-		Domain:     pb.Domain,
-		Backends:   backends,
-		PathRoutes: pathRoutes,
-		Security:   security,
+		Domain:           pb.Domain,
+		BackendIDs:       append([]string(nil), pb.BackendIds...),
+		PathRoutes:       pathRoutes,
+		SecurityPolicyID: pb.SecurityPolicyId,
 	}
 }
 
-func SecurityToPB(sec *config.SecurityConfig) *adminpb.SecurityConfigResponse {
-	if sec == nil {
-		return &adminpb.SecurityConfigResponse{
-			RateLimiting: &adminpb.RateLimitingConfig{},
-		}
+func SecurityPolicyToPB(policy view.SecurityPolicyResponse) *adminpb.SecurityPolicy {
+	return &adminpb.SecurityPolicy{
+		Id:           policy.Id,
+		RateLimiting: RateLimitingToPB(policy.RateLimiting),
+	}
+}
+
+func SecurityPolicyFromPB(pb *adminpb.SecurityPolicy) config.SecurityPolicy {
+	if pb == nil {
+		return config.SecurityPolicy{}
 	}
 
-	return &adminpb.SecurityConfigResponse{
-		RateLimiting: &adminpb.RateLimitingConfig{
-			Enabled:   sec.RateLimiting.Enabled,
-			RatePerIp: int32(sec.RateLimiting.RatePerIP),
-			Burst:     int32(sec.RateLimiting.Burst),
-			WindowSec: int32(sec.RateLimiting.WindowSec),
-		},
+	return config.SecurityPolicy{
+		Id:           pb.Id,
+		RateLimiting: RateLimitingFromPB(pb.RateLimiting),
+	}
+}
+
+func PoliciesToPB(policies []view.SecurityPolicyResponse) *adminpb.GetPoliciesResponse {
+	resp := &adminpb.GetPoliciesResponse{
+		Policies: make([]*adminpb.SecurityPolicy, 0, len(policies)),
+	}
+	for _, policy := range policies {
+		resp.Policies = append(resp.Policies, SecurityPolicyToPB(policy))
+	}
+	return resp
+}
+
+func VirtualHostSecurityToPB(sec view.VirtualHostSecurityResponse) *adminpb.VirtualHostSecurityResponse {
+	return &adminpb.VirtualHostSecurityResponse{
+		Domain:           sec.Domain,
+		SecurityPolicyId: sec.SecurityPolicyID,
+		Policy:           SecurityPolicyToPB(sec.Policy),
+	}
+}
+
+func ServerConfigToPB(cfg view.ServerConfigResponse) *adminpb.ServerConfig {
+	return &adminpb.ServerConfig{
+		ProxyPort:     int32(cfg.ProxyPort),
+		AdminGrpcPort: int32(cfg.AdminGrpcPort),
+	}
+}
+
+func LoadBalancerToPB(cfg view.LoadBalancerConfigResponse) *adminpb.LoadBalancerConfig {
+	return &adminpb.LoadBalancerConfig{
+		Strategy: cfg.Strategy,
 	}
 }
 

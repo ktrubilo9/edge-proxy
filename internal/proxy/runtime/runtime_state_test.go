@@ -4,6 +4,7 @@ import (
 	"edge-proxy/internal/config"
 	"edge-proxy/internal/metrics"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -62,10 +63,10 @@ func TestBuildRuntimeStateReusesComponentsForRoutingChange(t *testing.T) {
 	if next.LoadBalancer != initial.LoadBalancer {
 		t.Fatal("load balancer was replaced even though its strategy did not change")
 	}
-	if _, ok := next.BackendStatus("http://backend-2"); !ok {
+	if _, ok := next.BackendStatus("backend-2"); !ok {
 		t.Fatal("next state does not contain the new backend status")
 	}
-	if _, ok := next.BackendStatus("http://backend-1"); ok {
+	if _, ok := next.BackendStatus("backend-1"); ok {
 		t.Fatal("next state still contains the removed backend status")
 	}
 }
@@ -116,9 +117,11 @@ func runtimeTestSnapshot(
 	backendURL string,
 ) *config.Snapshot {
 	return config.BuildSnapshot(&config.FullConfig{
-		LBStrategy: strategy,
+		LoadBalancer: config.LoadBalancingConfig{
+			Strategy: strategy,
+		},
 		Backends: []*config.BackendConfig{
-			{URL: backendURL, Weight: 1, Enabled: true},
+			{Id: strings.TrimPrefix(backendURL, "http://"), URL: backendURL, Weight: 1, Enabled: true},
 		},
 		Timeouts: timeouts,
 	})

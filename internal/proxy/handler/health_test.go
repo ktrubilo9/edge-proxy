@@ -11,10 +11,15 @@ import (
 func TestPublicHealthHandlerDoesNotExposeBackendDetails(t *testing.T) {
 	backendURL := "http://backend.internal:3000"
 	rt := newTestRuntime(t, &config.FullConfig{
-		ProxyPort:  8080,
-		LBStrategy: "least-connections",
+		Server: config.ServerConfig{
+			ProxyPort:     8080,
+			AdminGrpcPort: 50051,
+		},
+		LoadBalancer: config.LoadBalancingConfig{
+			Strategy: "least-connections",
+		},
 		Backends: []*config.BackendConfig{
-			{URL: backendURL, Weight: 1, Enabled: true},
+			{Id: "backend", URL: backendURL, Weight: 1, Enabled: true},
 		},
 		HealthCheck: config.HealthCheckConfig{
 			Path:             "/health",
@@ -50,10 +55,15 @@ func TestPublicHealthHandlerDoesNotExposeBackendDetails(t *testing.T) {
 func TestPublicHealthHandlerReportsUnavailable(t *testing.T) {
 	backendURL := "http://backend.internal:3000"
 	rt := newTestRuntime(t, &config.FullConfig{
-		ProxyPort:  8080,
-		LBStrategy: "least-connections",
+		Server: config.ServerConfig{
+			ProxyPort:     8080,
+			AdminGrpcPort: 50051,
+		},
+		LoadBalancer: config.LoadBalancingConfig{
+			Strategy: "least-connections",
+		},
 		Backends: []*config.BackendConfig{
-			{URL: backendURL, Weight: 1, Enabled: true},
+			{Id: "backend", URL: backendURL, Weight: 1, Enabled: true},
 		},
 		HealthCheck: config.HealthCheckConfig{
 			Path:             "/health",
@@ -70,7 +80,7 @@ func TestPublicHealthHandlerReportsUnavailable(t *testing.T) {
 		},
 	})
 	current := rt.State()
-	status, ok := current.BackendStatus(backendURL)
+	status, ok := current.BackendStatus("backend")
 	if !ok {
 		t.Fatal("missing backend status")
 	}

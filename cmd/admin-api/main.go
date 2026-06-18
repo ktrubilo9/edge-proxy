@@ -56,9 +56,9 @@ func main() {
 	// Backend management
 	mux.HandleFunc("GET /api/backend", handler.HandleBackendsList(proxyClient))
 	mux.HandleFunc("POST /api/backend", handler.HandleBackendAdd(proxyClient))
-	mux.HandleFunc("GET /api/backend/{url...}", handler.HandleBackendGet(proxyClient))
-	mux.HandleFunc("PUT /api/backend/{url...}", handler.HandleBackendUpdate(proxyClient))
-	mux.HandleFunc("DELETE /api/backend/{url...}", handler.HandleBackendDelete(proxyClient))
+	mux.HandleFunc("GET /api/backend/{id}", handler.HandleBackendGet(proxyClient))
+	mux.HandleFunc("PUT /api/backend/{id}", handler.HandleBackendUpdate(proxyClient))
+	mux.HandleFunc("DELETE /api/backend/{id}", handler.HandleBackendDelete(proxyClient))
 
 	// Virtual host management
 	mux.HandleFunc("GET /api/vhost", handler.HandleVhostsList(proxyClient))
@@ -68,10 +68,14 @@ func main() {
 	mux.HandleFunc("DELETE /api/vhost/{domain}", handler.HandleVhostDelete(proxyClient))
 	mux.HandleFunc("GET /api/vhost/{domain}/security", handler.HandleSecurityConfigGet(proxyClient))
 	mux.HandleFunc("PUT /api/vhost/{domain}/security", handler.HandleSecurityConfigUpdate(proxyClient))
+	mux.HandleFunc("GET /api/security/policies", handler.HandlePoliciesList(proxyClient))
+	mux.HandleFunc("PUT /api/security/policies/{id}", handler.HandlePolicyUpsert(proxyClient))
 
-	// Global proxy settings
-	mux.HandleFunc("GET /api/config/lb", handler.HandleGlobalConfig(proxyClient))
-	mux.HandleFunc("PUT /api/config/lb", handler.HandleGlobalConfig(proxyClient))
+	// Proxy settings
+	mux.HandleFunc("GET /api/config/server", handler.HandleServerConfig(proxyClient))
+	mux.HandleFunc("PUT /api/config/server", handler.HandleServerConfig(proxyClient))
+	mux.HandleFunc("GET /api/config/lb", handler.HandleLoadBalancerConfig(proxyClient))
+	mux.HandleFunc("PUT /api/config/lb", handler.HandleLoadBalancerConfig(proxyClient))
 
 	handlerWithAuth := admin.NewAuthMiddleware(authEnabled, adminToken, mux)
 	handlerWithCORS := corsMiddleware(handlerWithAuth)

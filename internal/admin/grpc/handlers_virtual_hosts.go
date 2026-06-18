@@ -3,7 +3,6 @@ package grpc
 import (
 	"context"
 	"edge-proxy/internal/api/adminpb"
-	"edge-proxy/internal/config"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -27,7 +26,7 @@ func (s *AdminGRPCServer) GetVirtualHost(ctx context.Context, req *adminpb.GetVi
 }
 
 func (s *AdminGRPCServer) AddVirtualHost(ctx context.Context, req *adminpb.AddVirtualHostRequest) (*adminpb.BasicResponse, error) {
-	if err := s.Runtime.AddVirtualHost(VhostFromPB(req.Vhost)); err != nil {
+	if err := s.Runtime.AddVirtualHost(VhostFromPB(req.VirtualHost)); err != nil {
 		return fail(err.Error()), nil
 	}
 	return success("Virtual host added"), nil
@@ -41,45 +40,44 @@ func (s *AdminGRPCServer) RemoveVirtualHost(ctx context.Context, req *adminpb.Re
 }
 
 func (s *AdminGRPCServer) UpdateVirtualHost(ctx context.Context, req *adminpb.UpdateVirtualHostRequest) (*adminpb.BasicResponse, error) {
-	if err := s.Runtime.UpdateVirtualHost(req.Domain, VhostFromPB(req.Vhost)); err != nil {
+	if err := s.Runtime.UpdateVirtualHost(req.Domain, VhostFromPB(req.VirtualHost)); err != nil {
 		return fail(err.Error()), nil
 	}
 	return success("Virtual host updated"), nil
 }
 
-func (s *AdminGRPCServer) GetVirtualHostSecurityConfig(ctx context.Context, req *adminpb.GetVirtualHostRequest) (*adminpb.SecurityConfigResponse, error) {
+func (s *AdminGRPCServer) GetVirtualHostSecurity(ctx context.Context, req *adminpb.GetVirtualHostRequest) (*adminpb.VirtualHostSecurityResponse, error) {
 	if req.Domain == "" {
 		return nil, status.Error(codes.InvalidArgument, "domain required")
 	}
-	sec := s.Runtime.GetVirtualHostSecurityConfig(req.Domain)
+	sec := s.Runtime.GetVirtualHostSecurity(req.Domain)
 	if sec == nil {
 		return nil, status.Error(codes.NotFound, "virtual host not found")
 	}
 
-	return SecurityToPB(sec), nil
+	return VirtualHostSecurityToPB(*sec), nil
 }
 
-func (s *AdminGRPCServer) UpdateVirtualHostSecurityConfig(ctx context.Context, req *adminpb.UpdateSecurityConfigRequest) (*adminpb.BasicResponse, error) {
-	if req.Config == nil || req.Domain == "" {
-		return fail("domain and config are required"), nil
+func (s *AdminGRPCServer) SetVirtualHostSecurityPolicy(ctx context.Context, req *adminpb.SetVirtualHostSecurityPolicyRequest) (*adminpb.BasicResponse, error) {
+	if req.Domain == "" || req.PolicyId == "" {
+		return fail("domain and policy_id are required"), nil
 	}
-
-	if s.Runtime.GetVirtualHost(req.Domain) == nil {
-		return fail("virtual host not found"), nil
+	if err := s.Runtime.SetVirtualHostSecurityPolicy(req.Domain, req.PolicyId); err != nil {
+		return fail(err.Error()), nil
 	}
+	return success("virtual host security policy updated"), nil
+}
 
-	cfg := req.Config
+func (s *AdminGRPCServer) GetPolicies(ctx context.Context, _ *adminpb.Empty) (*adminpb.GetPoliciesResponse, error) {
+	return PoliciesToPB(s.Runtime.GetPolicies()), nil
+}
 
-	if cfg.RateLimiting != nil {
-		if err := s.Runtime.UpdateVirtualHostRateLimiting(req.Domain, config.RateLimitingConfig{
-			Enabled:   cfg.RateLimiting.Enabled,
-			RatePerIP: cfg.RateLimiting.RatePerIp,
-			Burst:     cfg.RateLimiting.Burst,
-			WindowSec: cfg.RateLimiting.WindowSec,
-		}); err != nil {
-			return fail(err.Error()), nil
-		}
+func (s *AdminGRPCServer) UpsertPolicy(ctx context.Context, req *adminpb.UpsertPolicyRequest) (*adminpb.BasicResponse, error) {
+	if req == nil || req.Policy == nil {
+		return fail("policy is required"), nil
 	}
-
-	return success("security config updated"), nil
+	if err := s.Runtime.UpsertPolicy(SecurityPolicyFromPB(req.Policy)); err != nil {
+		return fail(err.Error()), nil
+	}
+	return success("security policy saved"), nil
 }

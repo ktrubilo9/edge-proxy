@@ -119,9 +119,10 @@ func (x *BasicResponse) GetError() string {
 
 type Backend struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
-	Weight        int32                  `protobuf:"varint,2,opt,name=weight,proto3" json:"weight,omitempty"`
-	Enabled       bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	Weight        int32                  `protobuf:"varint,3,opt,name=weight,proto3" json:"weight,omitempty"`
+	Enabled       bool                   `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -156,6 +157,13 @@ func (*Backend) Descriptor() ([]byte, []int) {
 	return file_admin_proto_rawDescGZIP(), []int{2}
 }
 
+func (x *Backend) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
 func (x *Backend) GetUrl() string {
 	if x != nil {
 		return x.Url
@@ -179,12 +187,13 @@ func (x *Backend) GetEnabled() bool {
 
 type BackendResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
-	Weight        int32                  `protobuf:"varint,2,opt,name=weight,proto3" json:"weight,omitempty"`
-	Enabled       bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Active        bool                   `protobuf:"varint,4,opt,name=active,proto3" json:"active,omitempty"`
-	ErrorCount    uint32                 `protobuf:"varint,5,opt,name=error_count,json=errorCount,proto3" json:"error_count,omitempty"`
-	LastError     string                 `protobuf:"bytes,6,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	Weight        int32                  `protobuf:"varint,3,opt,name=weight,proto3" json:"weight,omitempty"`
+	Enabled       bool                   `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Active        bool                   `protobuf:"varint,5,opt,name=active,proto3" json:"active,omitempty"`
+	ErrorCount    uint32                 `protobuf:"varint,6,opt,name=error_count,json=errorCount,proto3" json:"error_count,omitempty"`
+	LastError     string                 `protobuf:"bytes,7,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -217,6 +226,13 @@ func (x *BackendResponse) ProtoReflect() protoreflect.Message {
 // Deprecated: Use BackendResponse.ProtoReflect.Descriptor instead.
 func (*BackendResponse) Descriptor() ([]byte, []int) {
 	return file_admin_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *BackendResponse) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
 }
 
 func (x *BackendResponse) GetUrl() string {
@@ -307,7 +323,7 @@ func (x *GetBackendsResponse) GetBackends() []*BackendResponse {
 
 type GetBackendRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -342,17 +358,19 @@ func (*GetBackendRequest) Descriptor() ([]byte, []int) {
 	return file_admin_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *GetBackendRequest) GetUrl() string {
+func (x *GetBackendRequest) GetId() string {
 	if x != nil {
-		return x.Url
+		return x.Id
 	}
 	return ""
 }
 
 type AddBackendRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
-	Weight        int32                  `protobuf:"varint,2,opt,name=weight,proto3" json:"weight,omitempty"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	Weight        int32                  `protobuf:"varint,3,opt,name=weight,proto3" json:"weight,omitempty"`
+	Enabled       bool                   `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -387,6 +405,13 @@ func (*AddBackendRequest) Descriptor() ([]byte, []int) {
 	return file_admin_proto_rawDescGZIP(), []int{6}
 }
 
+func (x *AddBackendRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
 func (x *AddBackendRequest) GetUrl() string {
 	if x != nil {
 		return x.Url
@@ -401,9 +426,16 @@ func (x *AddBackendRequest) GetWeight() int32 {
 	return 0
 }
 
+func (x *AddBackendRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
 type RemoveBackendRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -438,18 +470,19 @@ func (*RemoveBackendRequest) Descriptor() ([]byte, []int) {
 	return file_admin_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *RemoveBackendRequest) GetUrl() string {
+func (x *RemoveBackendRequest) GetId() string {
 	if x != nil {
-		return x.Url
+		return x.Id
 	}
 	return ""
 }
 
 type UpdateBackendRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
-	Weight        int32                  `protobuf:"varint,2,opt,name=weight,proto3" json:"weight,omitempty"`
-	Enabled       bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	Weight        int32                  `protobuf:"varint,3,opt,name=weight,proto3" json:"weight,omitempty"`
+	Enabled       bool                   `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -482,6 +515,13 @@ func (x *UpdateBackendRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use UpdateBackendRequest.ProtoReflect.Descriptor instead.
 func (*UpdateBackendRequest) Descriptor() ([]byte, []int) {
 	return file_admin_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *UpdateBackendRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
 }
 
 func (x *UpdateBackendRequest) GetUrl() string {
@@ -701,28 +741,28 @@ func (x *MetricsResponse) GetUptime() string {
 	return ""
 }
 
-type GlobalConfig struct {
+type ServerConfig struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ProxyPort     int32                  `protobuf:"varint,1,opt,name=proxy_port,json=proxyPort,proto3" json:"proxy_port,omitempty"`
-	LbStrategy    string                 `protobuf:"bytes,2,opt,name=lb_strategy,json=lbStrategy,proto3" json:"lb_strategy,omitempty"`
+	AdminGrpcPort int32                  `protobuf:"varint,2,opt,name=admin_grpc_port,json=adminGrpcPort,proto3" json:"admin_grpc_port,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GlobalConfig) Reset() {
-	*x = GlobalConfig{}
+func (x *ServerConfig) Reset() {
+	*x = ServerConfig{}
 	mi := &file_admin_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GlobalConfig) String() string {
+func (x *ServerConfig) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GlobalConfig) ProtoMessage() {}
+func (*ServerConfig) ProtoMessage() {}
 
-func (x *GlobalConfig) ProtoReflect() protoreflect.Message {
+func (x *ServerConfig) ProtoReflect() protoreflect.Message {
 	mi := &file_admin_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -734,91 +774,91 @@ func (x *GlobalConfig) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GlobalConfig.ProtoReflect.Descriptor instead.
-func (*GlobalConfig) Descriptor() ([]byte, []int) {
+// Deprecated: Use ServerConfig.ProtoReflect.Descriptor instead.
+func (*ServerConfig) Descriptor() ([]byte, []int) {
 	return file_admin_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *GlobalConfig) GetProxyPort() int32 {
+func (x *ServerConfig) GetProxyPort() int32 {
 	if x != nil {
 		return x.ProxyPort
 	}
 	return 0
 }
 
-func (x *GlobalConfig) GetLbStrategy() string {
+func (x *ServerConfig) GetAdminGrpcPort() int32 {
 	if x != nil {
-		return x.LbStrategy
+		return x.AdminGrpcPort
+	}
+	return 0
+}
+
+type LoadBalancerConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Strategy      string                 `protobuf:"bytes,1,opt,name=strategy,proto3" json:"strategy,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LoadBalancerConfig) Reset() {
+	*x = LoadBalancerConfig{}
+	mi := &file_admin_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LoadBalancerConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LoadBalancerConfig) ProtoMessage() {}
+
+func (x *LoadBalancerConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_admin_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LoadBalancerConfig.ProtoReflect.Descriptor instead.
+func (*LoadBalancerConfig) Descriptor() ([]byte, []int) {
+	return file_admin_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *LoadBalancerConfig) GetStrategy() string {
+	if x != nil {
+		return x.Strategy
 	}
 	return ""
 }
 
-type SecurityConfigResponse struct {
+type SetVirtualHostSecurityPolicyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RateLimiting  *RateLimitingConfig    `protobuf:"bytes,1,opt,name=rate_limiting,json=rateLimiting,proto3" json:"rate_limiting,omitempty"`
+	Domain        string                 `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
+	PolicyId      string                 `protobuf:"bytes,2,opt,name=policy_id,json=policyId,proto3" json:"policy_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SecurityConfigResponse) Reset() {
-	*x = SecurityConfigResponse{}
-	mi := &file_admin_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SecurityConfigResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SecurityConfigResponse) ProtoMessage() {}
-
-func (x *SecurityConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SecurityConfigResponse.ProtoReflect.Descriptor instead.
-func (*SecurityConfigResponse) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *SecurityConfigResponse) GetRateLimiting() *RateLimitingConfig {
-	if x != nil {
-		return x.RateLimiting
-	}
-	return nil
-}
-
-type UpdateSecurityConfigRequest struct {
-	state         protoimpl.MessageState  `protogen:"open.v1"`
-	Domain        string                  `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
-	Config        *SecurityConfigResponse `protobuf:"bytes,2,opt,name=config,proto3" json:"config,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UpdateSecurityConfigRequest) Reset() {
-	*x = UpdateSecurityConfigRequest{}
+func (x *SetVirtualHostSecurityPolicyRequest) Reset() {
+	*x = SetVirtualHostSecurityPolicyRequest{}
 	mi := &file_admin_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *UpdateSecurityConfigRequest) String() string {
+func (x *SetVirtualHostSecurityPolicyRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*UpdateSecurityConfigRequest) ProtoMessage() {}
+func (*SetVirtualHostSecurityPolicyRequest) ProtoMessage() {}
 
-func (x *UpdateSecurityConfigRequest) ProtoReflect() protoreflect.Message {
+func (x *SetVirtualHostSecurityPolicyRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_admin_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -830,21 +870,161 @@ func (x *UpdateSecurityConfigRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UpdateSecurityConfigRequest.ProtoReflect.Descriptor instead.
-func (*UpdateSecurityConfigRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use SetVirtualHostSecurityPolicyRequest.ProtoReflect.Descriptor instead.
+func (*SetVirtualHostSecurityPolicyRequest) Descriptor() ([]byte, []int) {
 	return file_admin_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *UpdateSecurityConfigRequest) GetDomain() string {
+func (x *SetVirtualHostSecurityPolicyRequest) GetDomain() string {
 	if x != nil {
 		return x.Domain
 	}
 	return ""
 }
 
-func (x *UpdateSecurityConfigRequest) GetConfig() *SecurityConfigResponse {
+func (x *SetVirtualHostSecurityPolicyRequest) GetPolicyId() string {
 	if x != nil {
-		return x.Config
+		return x.PolicyId
+	}
+	return ""
+}
+
+type UpsertPolicyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Policy        *SecurityPolicy        `protobuf:"bytes,1,opt,name=policy,proto3" json:"policy,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpsertPolicyRequest) Reset() {
+	*x = UpsertPolicyRequest{}
+	mi := &file_admin_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpsertPolicyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpsertPolicyRequest) ProtoMessage() {}
+
+func (x *UpsertPolicyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_admin_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpsertPolicyRequest.ProtoReflect.Descriptor instead.
+func (*UpsertPolicyRequest) Descriptor() ([]byte, []int) {
+	return file_admin_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *UpsertPolicyRequest) GetPolicy() *SecurityPolicy {
+	if x != nil {
+		return x.Policy
+	}
+	return nil
+}
+
+type GetPoliciesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Policies      []*SecurityPolicy      `protobuf:"bytes,1,rep,name=policies,proto3" json:"policies,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPoliciesResponse) Reset() {
+	*x = GetPoliciesResponse{}
+	mi := &file_admin_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPoliciesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPoliciesResponse) ProtoMessage() {}
+
+func (x *GetPoliciesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_admin_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPoliciesResponse.ProtoReflect.Descriptor instead.
+func (*GetPoliciesResponse) Descriptor() ([]byte, []int) {
+	return file_admin_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *GetPoliciesResponse) GetPolicies() []*SecurityPolicy {
+	if x != nil {
+		return x.Policies
+	}
+	return nil
+}
+
+type SecurityPolicy struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	RateLimiting  *RateLimitingConfig    `protobuf:"bytes,2,opt,name=rate_limiting,json=rateLimiting,proto3" json:"rate_limiting,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SecurityPolicy) Reset() {
+	*x = SecurityPolicy{}
+	mi := &file_admin_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SecurityPolicy) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SecurityPolicy) ProtoMessage() {}
+
+func (x *SecurityPolicy) ProtoReflect() protoreflect.Message {
+	mi := &file_admin_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SecurityPolicy.ProtoReflect.Descriptor instead.
+func (*SecurityPolicy) Descriptor() ([]byte, []int) {
+	return file_admin_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *SecurityPolicy) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SecurityPolicy) GetRateLimiting() *RateLimitingConfig {
+	if x != nil {
+		return x.RateLimiting
 	}
 	return nil
 }
@@ -861,7 +1041,7 @@ type RateLimitingConfig struct {
 
 func (x *RateLimitingConfig) Reset() {
 	*x = RateLimitingConfig{}
-	mi := &file_admin_proto_msgTypes[13]
+	mi := &file_admin_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -873,7 +1053,7 @@ func (x *RateLimitingConfig) String() string {
 func (*RateLimitingConfig) ProtoMessage() {}
 
 func (x *RateLimitingConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[13]
+	mi := &file_admin_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -886,7 +1066,7 @@ func (x *RateLimitingConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RateLimitingConfig.ProtoReflect.Descriptor instead.
 func (*RateLimitingConfig) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{13}
+	return file_admin_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *RateLimitingConfig) GetEnabled() bool {
@@ -926,7 +1106,7 @@ type GetVirtualHostsResponse struct {
 
 func (x *GetVirtualHostsResponse) Reset() {
 	*x = GetVirtualHostsResponse{}
-	mi := &file_admin_proto_msgTypes[14]
+	mi := &file_admin_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -938,7 +1118,7 @@ func (x *GetVirtualHostsResponse) String() string {
 func (*GetVirtualHostsResponse) ProtoMessage() {}
 
 func (x *GetVirtualHostsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[14]
+	mi := &file_admin_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -951,7 +1131,7 @@ func (x *GetVirtualHostsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVirtualHostsResponse.ProtoReflect.Descriptor instead.
 func (*GetVirtualHostsResponse) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{14}
+	return file_admin_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetVirtualHostsResponse) GetVirtualHosts() []*VirtualHost {
@@ -970,7 +1150,7 @@ type GetVirtualHostRequest struct {
 
 func (x *GetVirtualHostRequest) Reset() {
 	*x = GetVirtualHostRequest{}
-	mi := &file_admin_proto_msgTypes[15]
+	mi := &file_admin_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -982,7 +1162,7 @@ func (x *GetVirtualHostRequest) String() string {
 func (*GetVirtualHostRequest) ProtoMessage() {}
 
 func (x *GetVirtualHostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[15]
+	mi := &file_admin_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -995,7 +1175,7 @@ func (x *GetVirtualHostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVirtualHostRequest.ProtoReflect.Descriptor instead.
 func (*GetVirtualHostRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{15}
+	return file_admin_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetVirtualHostRequest) GetDomain() string {
@@ -1008,7 +1188,7 @@ func (x *GetVirtualHostRequest) GetDomain() string {
 type PathRoute struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
-	Backends      []string               `protobuf:"bytes,2,rep,name=backends,proto3" json:"backends,omitempty"`
+	BackendIds    []string               `protobuf:"bytes,2,rep,name=backend_ids,json=backendIds,proto3" json:"backend_ids,omitempty"`
 	StripPrefix   bool                   `protobuf:"varint,3,opt,name=strip_prefix,json=stripPrefix,proto3" json:"strip_prefix,omitempty"`
 	Rewrite       string                 `protobuf:"bytes,4,opt,name=rewrite,proto3" json:"rewrite,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1017,7 +1197,7 @@ type PathRoute struct {
 
 func (x *PathRoute) Reset() {
 	*x = PathRoute{}
-	mi := &file_admin_proto_msgTypes[16]
+	mi := &file_admin_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1029,7 +1209,7 @@ func (x *PathRoute) String() string {
 func (*PathRoute) ProtoMessage() {}
 
 func (x *PathRoute) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[16]
+	mi := &file_admin_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1042,7 +1222,7 @@ func (x *PathRoute) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PathRoute.ProtoReflect.Descriptor instead.
 func (*PathRoute) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{16}
+	return file_admin_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *PathRoute) GetPath() string {
@@ -1052,9 +1232,9 @@ func (x *PathRoute) GetPath() string {
 	return ""
 }
 
-func (x *PathRoute) GetBackends() []string {
+func (x *PathRoute) GetBackendIds() []string {
 	if x != nil {
-		return x.Backends
+		return x.BackendIds
 	}
 	return nil
 }
@@ -1074,18 +1254,18 @@ func (x *PathRoute) GetRewrite() string {
 }
 
 type VirtualHost struct {
-	state          protoimpl.MessageState  `protogen:"open.v1"`
-	Domain         string                  `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
-	Backends       []string                `protobuf:"bytes,2,rep,name=backends,proto3" json:"backends,omitempty"`
-	PathRoutes     []*PathRoute            `protobuf:"bytes,3,rep,name=path_routes,json=pathRoutes,proto3" json:"path_routes,omitempty"`
-	SecurityConfig *SecurityConfigResponse `protobuf:"bytes,4,opt,name=security_config,json=securityConfig,proto3" json:"security_config,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Domain           string                 `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
+	BackendIds       []string               `protobuf:"bytes,2,rep,name=backend_ids,json=backendIds,proto3" json:"backend_ids,omitempty"`
+	PathRoutes       []*PathRoute           `protobuf:"bytes,3,rep,name=path_routes,json=pathRoutes,proto3" json:"path_routes,omitempty"`
+	SecurityPolicyId string                 `protobuf:"bytes,4,opt,name=security_policy_id,json=securityPolicyId,proto3" json:"security_policy_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *VirtualHost) Reset() {
 	*x = VirtualHost{}
-	mi := &file_admin_proto_msgTypes[17]
+	mi := &file_admin_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1097,7 +1277,7 @@ func (x *VirtualHost) String() string {
 func (*VirtualHost) ProtoMessage() {}
 
 func (x *VirtualHost) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[17]
+	mi := &file_admin_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1110,7 +1290,7 @@ func (x *VirtualHost) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VirtualHost.ProtoReflect.Descriptor instead.
 func (*VirtualHost) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{17}
+	return file_admin_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *VirtualHost) GetDomain() string {
@@ -1120,9 +1300,9 @@ func (x *VirtualHost) GetDomain() string {
 	return ""
 }
 
-func (x *VirtualHost) GetBackends() []string {
+func (x *VirtualHost) GetBackendIds() []string {
 	if x != nil {
-		return x.Backends
+		return x.BackendIds
 	}
 	return nil
 }
@@ -1134,23 +1314,83 @@ func (x *VirtualHost) GetPathRoutes() []*PathRoute {
 	return nil
 }
 
-func (x *VirtualHost) GetSecurityConfig() *SecurityConfigResponse {
+func (x *VirtualHost) GetSecurityPolicyId() string {
 	if x != nil {
-		return x.SecurityConfig
+		return x.SecurityPolicyId
+	}
+	return ""
+}
+
+type VirtualHostSecurityResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Domain           string                 `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
+	SecurityPolicyId string                 `protobuf:"bytes,2,opt,name=security_policy_id,json=securityPolicyId,proto3" json:"security_policy_id,omitempty"`
+	Policy           *SecurityPolicy        `protobuf:"bytes,3,opt,name=policy,proto3" json:"policy,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *VirtualHostSecurityResponse) Reset() {
+	*x = VirtualHostSecurityResponse{}
+	mi := &file_admin_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VirtualHostSecurityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VirtualHostSecurityResponse) ProtoMessage() {}
+
+func (x *VirtualHostSecurityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_admin_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VirtualHostSecurityResponse.ProtoReflect.Descriptor instead.
+func (*VirtualHostSecurityResponse) Descriptor() ([]byte, []int) {
+	return file_admin_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *VirtualHostSecurityResponse) GetDomain() string {
+	if x != nil {
+		return x.Domain
+	}
+	return ""
+}
+
+func (x *VirtualHostSecurityResponse) GetSecurityPolicyId() string {
+	if x != nil {
+		return x.SecurityPolicyId
+	}
+	return ""
+}
+
+func (x *VirtualHostSecurityResponse) GetPolicy() *SecurityPolicy {
+	if x != nil {
+		return x.Policy
 	}
 	return nil
 }
 
 type AddVirtualHostRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Vhost         *VirtualHost           `protobuf:"bytes,1,opt,name=vhost,proto3" json:"vhost,omitempty"`
+	VirtualHost   *VirtualHost           `protobuf:"bytes,1,opt,name=virtual_host,json=virtualHost,proto3" json:"virtual_host,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AddVirtualHostRequest) Reset() {
 	*x = AddVirtualHostRequest{}
-	mi := &file_admin_proto_msgTypes[18]
+	mi := &file_admin_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1162,7 +1402,7 @@ func (x *AddVirtualHostRequest) String() string {
 func (*AddVirtualHostRequest) ProtoMessage() {}
 
 func (x *AddVirtualHostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[18]
+	mi := &file_admin_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1175,12 +1415,12 @@ func (x *AddVirtualHostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddVirtualHostRequest.ProtoReflect.Descriptor instead.
 func (*AddVirtualHostRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{18}
+	return file_admin_proto_rawDescGZIP(), []int{22}
 }
 
-func (x *AddVirtualHostRequest) GetVhost() *VirtualHost {
+func (x *AddVirtualHostRequest) GetVirtualHost() *VirtualHost {
 	if x != nil {
-		return x.Vhost
+		return x.VirtualHost
 	}
 	return nil
 }
@@ -1194,7 +1434,7 @@ type RemoveVirtualHostRequest struct {
 
 func (x *RemoveVirtualHostRequest) Reset() {
 	*x = RemoveVirtualHostRequest{}
-	mi := &file_admin_proto_msgTypes[19]
+	mi := &file_admin_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1206,7 +1446,7 @@ func (x *RemoveVirtualHostRequest) String() string {
 func (*RemoveVirtualHostRequest) ProtoMessage() {}
 
 func (x *RemoveVirtualHostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[19]
+	mi := &file_admin_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1219,7 +1459,7 @@ func (x *RemoveVirtualHostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveVirtualHostRequest.ProtoReflect.Descriptor instead.
 func (*RemoveVirtualHostRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{19}
+	return file_admin_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RemoveVirtualHostRequest) GetDomain() string {
@@ -1232,14 +1472,14 @@ func (x *RemoveVirtualHostRequest) GetDomain() string {
 type UpdateVirtualHostRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Domain        string                 `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
-	Vhost         *VirtualHost           `protobuf:"bytes,2,opt,name=vhost,proto3" json:"vhost,omitempty"`
+	VirtualHost   *VirtualHost           `protobuf:"bytes,2,opt,name=virtual_host,json=virtualHost,proto3" json:"virtual_host,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateVirtualHostRequest) Reset() {
 	*x = UpdateVirtualHostRequest{}
-	mi := &file_admin_proto_msgTypes[20]
+	mi := &file_admin_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1251,7 +1491,7 @@ func (x *UpdateVirtualHostRequest) String() string {
 func (*UpdateVirtualHostRequest) ProtoMessage() {}
 
 func (x *UpdateVirtualHostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[20]
+	mi := &file_admin_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1264,7 +1504,7 @@ func (x *UpdateVirtualHostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateVirtualHostRequest.ProtoReflect.Descriptor instead.
 func (*UpdateVirtualHostRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{20}
+	return file_admin_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *UpdateVirtualHostRequest) GetDomain() string {
@@ -1274,9 +1514,9 @@ func (x *UpdateVirtualHostRequest) GetDomain() string {
 	return ""
 }
 
-func (x *UpdateVirtualHostRequest) GetVhost() *VirtualHost {
+func (x *UpdateVirtualHostRequest) GetVirtualHost() *VirtualHost {
 	if x != nil {
-		return x.Vhost
+		return x.VirtualHost
 	}
 	return nil
 }
@@ -1290,33 +1530,38 @@ const file_admin_proto_rawDesc = "" +
 	"\rBasicResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"M\n" +
-	"\aBackend\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url\x12\x16\n" +
-	"\x06weight\x18\x02 \x01(\x05R\x06weight\x12\x18\n" +
-	"\aenabled\x18\x03 \x01(\bR\aenabled\"\xad\x01\n" +
-	"\x0fBackendResponse\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url\x12\x16\n" +
-	"\x06weight\x18\x02 \x01(\x05R\x06weight\x12\x18\n" +
-	"\aenabled\x18\x03 \x01(\bR\aenabled\x12\x16\n" +
-	"\x06active\x18\x04 \x01(\bR\x06active\x12\x1f\n" +
-	"\verror_count\x18\x05 \x01(\rR\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"]\n" +
+	"\aBackend\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x12\x16\n" +
+	"\x06weight\x18\x03 \x01(\x05R\x06weight\x12\x18\n" +
+	"\aenabled\x18\x04 \x01(\bR\aenabled\"\xbd\x01\n" +
+	"\x0fBackendResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x12\x16\n" +
+	"\x06weight\x18\x03 \x01(\x05R\x06weight\x12\x18\n" +
+	"\aenabled\x18\x04 \x01(\bR\aenabled\x12\x16\n" +
+	"\x06active\x18\x05 \x01(\bR\x06active\x12\x1f\n" +
+	"\verror_count\x18\x06 \x01(\rR\n" +
 	"errorCount\x12\x1d\n" +
 	"\n" +
-	"last_error\x18\x06 \x01(\tR\tlastError\"I\n" +
+	"last_error\x18\a \x01(\tR\tlastError\"I\n" +
 	"\x13GetBackendsResponse\x122\n" +
-	"\bbackends\x18\x01 \x03(\v2\x16.admin.BackendResponseR\bbackends\"%\n" +
-	"\x11GetBackendRequest\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url\"=\n" +
-	"\x11AddBackendRequest\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url\x12\x16\n" +
-	"\x06weight\x18\x02 \x01(\x05R\x06weight\"(\n" +
-	"\x14RemoveBackendRequest\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url\"Z\n" +
-	"\x14UpdateBackendRequest\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url\x12\x16\n" +
-	"\x06weight\x18\x02 \x01(\x05R\x06weight\x12\x18\n" +
-	"\aenabled\x18\x03 \x01(\bR\aenabled\"\x89\x0f\n" +
+	"\bbackends\x18\x01 \x03(\v2\x16.admin.BackendResponseR\bbackends\"#\n" +
+	"\x11GetBackendRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"g\n" +
+	"\x11AddBackendRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x12\x16\n" +
+	"\x06weight\x18\x03 \x01(\x05R\x06weight\x12\x18\n" +
+	"\aenabled\x18\x04 \x01(\bR\aenabled\"&\n" +
+	"\x14RemoveBackendRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"j\n" +
+	"\x14UpdateBackendRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x12\x16\n" +
+	"\x06weight\x18\x03 \x01(\x05R\x06weight\x12\x18\n" +
+	"\aenabled\x18\x04 \x01(\bR\aenabled\"\x89\x0f\n" +
 	"\x0fMetricsResponse\x12%\n" +
 	"\x0etotal_requests\x18\x01 \x01(\x04R\rtotalRequests\x12'\n" +
 	"\x0ffailed_requests\x18\x02 \x01(\x04R\x0efailedRequests\x12$\n" +
@@ -1368,17 +1613,23 @@ const file_admin_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a?\n" +
 	"\x11MethodsCountEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"N\n" +
-	"\fGlobalConfig\x12\x1d\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"U\n" +
+	"\fServerConfig\x12\x1d\n" +
 	"\n" +
-	"proxy_port\x18\x01 \x01(\x05R\tproxyPort\x12\x1f\n" +
-	"\vlb_strategy\x18\x02 \x01(\tR\n" +
-	"lbStrategy\"X\n" +
-	"\x16SecurityConfigResponse\x12>\n" +
-	"\rrate_limiting\x18\x01 \x01(\v2\x19.admin.RateLimitingConfigR\frateLimiting\"l\n" +
-	"\x1bUpdateSecurityConfigRequest\x12\x16\n" +
-	"\x06domain\x18\x01 \x01(\tR\x06domain\x125\n" +
-	"\x06config\x18\x02 \x01(\v2\x1d.admin.SecurityConfigResponseR\x06config\"\x83\x01\n" +
+	"proxy_port\x18\x01 \x01(\x05R\tproxyPort\x12&\n" +
+	"\x0fadmin_grpc_port\x18\x02 \x01(\x05R\radminGrpcPort\"0\n" +
+	"\x12LoadBalancerConfig\x12\x1a\n" +
+	"\bstrategy\x18\x01 \x01(\tR\bstrategy\"Z\n" +
+	"#SetVirtualHostSecurityPolicyRequest\x12\x16\n" +
+	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x1b\n" +
+	"\tpolicy_id\x18\x02 \x01(\tR\bpolicyId\"D\n" +
+	"\x13UpsertPolicyRequest\x12-\n" +
+	"\x06policy\x18\x01 \x01(\v2\x15.admin.SecurityPolicyR\x06policy\"H\n" +
+	"\x13GetPoliciesResponse\x121\n" +
+	"\bpolicies\x18\x01 \x03(\v2\x15.admin.SecurityPolicyR\bpolicies\"`\n" +
+	"\x0eSecurityPolicy\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12>\n" +
+	"\rrate_limiting\x18\x02 \x01(\v2\x19.admin.RateLimitingConfigR\frateLimiting\"\x83\x01\n" +
 	"\x12RateLimitingConfig\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1e\n" +
 	"\vrate_per_ip\x18\x02 \x01(\x05R\tratePerIp\x12\x14\n" +
@@ -1388,25 +1639,32 @@ const file_admin_proto_rawDesc = "" +
 	"\x17GetVirtualHostsResponse\x127\n" +
 	"\rvirtual_hosts\x18\x01 \x03(\v2\x12.admin.VirtualHostR\fvirtualHosts\"/\n" +
 	"\x15GetVirtualHostRequest\x12\x16\n" +
-	"\x06domain\x18\x01 \x01(\tR\x06domain\"x\n" +
+	"\x06domain\x18\x01 \x01(\tR\x06domain\"}\n" +
 	"\tPathRoute\x12\x12\n" +
-	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1a\n" +
-	"\bbackends\x18\x02 \x03(\tR\bbackends\x12!\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1f\n" +
+	"\vbackend_ids\x18\x02 \x03(\tR\n" +
+	"backendIds\x12!\n" +
 	"\fstrip_prefix\x18\x03 \x01(\bR\vstripPrefix\x12\x18\n" +
-	"\arewrite\x18\x04 \x01(\tR\arewrite\"\xbc\x01\n" +
+	"\arewrite\x18\x04 \x01(\tR\arewrite\"\xa7\x01\n" +
 	"\vVirtualHost\x12\x16\n" +
-	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x1a\n" +
-	"\bbackends\x18\x02 \x03(\tR\bbackends\x121\n" +
+	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x1f\n" +
+	"\vbackend_ids\x18\x02 \x03(\tR\n" +
+	"backendIds\x121\n" +
 	"\vpath_routes\x18\x03 \x03(\v2\x10.admin.PathRouteR\n" +
-	"pathRoutes\x12F\n" +
-	"\x0fsecurity_config\x18\x04 \x01(\v2\x1d.admin.SecurityConfigResponseR\x0esecurityConfig\"A\n" +
-	"\x15AddVirtualHostRequest\x12(\n" +
-	"\x05vhost\x18\x01 \x01(\v2\x12.admin.VirtualHostR\x05vhost\"2\n" +
+	"pathRoutes\x12,\n" +
+	"\x12security_policy_id\x18\x04 \x01(\tR\x10securityPolicyId\"\x92\x01\n" +
+	"\x1bVirtualHostSecurityResponse\x12\x16\n" +
+	"\x06domain\x18\x01 \x01(\tR\x06domain\x12,\n" +
+	"\x12security_policy_id\x18\x02 \x01(\tR\x10securityPolicyId\x12-\n" +
+	"\x06policy\x18\x03 \x01(\v2\x15.admin.SecurityPolicyR\x06policy\"N\n" +
+	"\x15AddVirtualHostRequest\x125\n" +
+	"\fvirtual_host\x18\x01 \x01(\v2\x12.admin.VirtualHostR\vvirtualHost\"2\n" +
 	"\x18RemoveVirtualHostRequest\x12\x16\n" +
-	"\x06domain\x18\x01 \x01(\tR\x06domain\"\\\n" +
+	"\x06domain\x18\x01 \x01(\tR\x06domain\"i\n" +
 	"\x18UpdateVirtualHostRequest\x12\x16\n" +
-	"\x06domain\x18\x01 \x01(\tR\x06domain\x12(\n" +
-	"\x05vhost\x18\x02 \x01(\v2\x12.admin.VirtualHostR\x05vhost2\x90\b\n" +
+	"\x06domain\x18\x01 \x01(\tR\x06domain\x125\n" +
+	"\fvirtual_host\x18\x02 \x01(\v2\x12.admin.VirtualHostR\vvirtualHost2\x8f\n" +
+	"\n" +
 	"\n" +
 	"ProxyAdmin\x127\n" +
 	"\vGetBackends\x12\f.admin.Empty\x1a\x1a.admin.GetBackendsResponse\x12>\n" +
@@ -1417,14 +1675,18 @@ const file_admin_proto_rawDesc = "" +
 	"\rRemoveBackend\x12\x1b.admin.RemoveBackendRequest\x1a\x14.admin.BasicResponse\x12B\n" +
 	"\rUpdateBackend\x12\x1b.admin.UpdateBackendRequest\x1a\x14.admin.BasicResponse\x12?\n" +
 	"\x0fGetVirtualHosts\x12\f.admin.Empty\x1a\x1e.admin.GetVirtualHostsResponse\x12B\n" +
-	"\x0eGetVirtualHost\x12\x1c.admin.GetVirtualHostRequest\x1a\x12.admin.VirtualHost\x12D\n" +
+	"\x0eGetVirtualHost\x12\x1c.admin.GetVirtualHostRequest\x1a\x12.admin.VirtualHost\x12Z\n" +
+	"\x16GetVirtualHostSecurity\x12\x1c.admin.GetVirtualHostRequest\x1a\".admin.VirtualHostSecurityResponse\x12`\n" +
+	"\x1cSetVirtualHostSecurityPolicy\x12*.admin.SetVirtualHostSecurityPolicyRequest\x1a\x14.admin.BasicResponse\x12D\n" +
 	"\x0eAddVirtualHost\x12\x1c.admin.AddVirtualHostRequest\x1a\x14.admin.BasicResponse\x12J\n" +
 	"\x11RemoveVirtualHost\x12\x1f.admin.RemoveVirtualHostRequest\x1a\x14.admin.BasicResponse\x12J\n" +
-	"\x11UpdateVirtualHost\x12\x1f.admin.UpdateVirtualHostRequest\x1a\x14.admin.BasicResponse\x12[\n" +
-	"\x1cGetVirtualHostSecurityConfig\x12\x1c.admin.GetVirtualHostRequest\x1a\x1d.admin.SecurityConfigResponse\x12[\n" +
-	"\x1fUpdateVirtualHostSecurityConfig\x12\".admin.UpdateSecurityConfigRequest\x1a\x14.admin.BasicResponse\x124\n" +
-	"\x0fGetGlobalConfig\x12\f.admin.Empty\x1a\x13.admin.GlobalConfig\x12<\n" +
-	"\x0fSetGlobalConfig\x12\x13.admin.GlobalConfig\x1a\x14.admin.BasicResponse\x122\n" +
+	"\x11UpdateVirtualHost\x12\x1f.admin.UpdateVirtualHostRequest\x1a\x14.admin.BasicResponse\x124\n" +
+	"\x0fGetServerConfig\x12\f.admin.Empty\x1a\x13.admin.ServerConfig\x12<\n" +
+	"\x0fSetServerConfig\x12\x13.admin.ServerConfig\x1a\x14.admin.BasicResponse\x12:\n" +
+	"\x0fGetLoadBalancer\x12\f.admin.Empty\x1a\x19.admin.LoadBalancerConfig\x12B\n" +
+	"\x0fSetLoadBalancer\x12\x19.admin.LoadBalancerConfig\x1a\x14.admin.BasicResponse\x127\n" +
+	"\vGetPolicies\x12\f.admin.Empty\x1a\x1a.admin.GetPoliciesResponse\x12@\n" +
+	"\fUpsertPolicy\x12\x1a.admin.UpsertPolicyRequest\x1a\x14.admin.BasicResponse\x122\n" +
 	"\n" +
 	"GetMetrics\x12\f.admin.Empty\x1a\x16.admin.MetricsResponseB\vZ\t./adminpbb\x06proto3"
 
@@ -1440,92 +1702,105 @@ func file_admin_proto_rawDescGZIP() []byte {
 	return file_admin_proto_rawDescData
 }
 
-var file_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_admin_proto_goTypes = []any{
-	(*Empty)(nil),                       // 0: admin.Empty
-	(*BasicResponse)(nil),               // 1: admin.BasicResponse
-	(*Backend)(nil),                     // 2: admin.Backend
-	(*BackendResponse)(nil),             // 3: admin.BackendResponse
-	(*GetBackendsResponse)(nil),         // 4: admin.GetBackendsResponse
-	(*GetBackendRequest)(nil),           // 5: admin.GetBackendRequest
-	(*AddBackendRequest)(nil),           // 6: admin.AddBackendRequest
-	(*RemoveBackendRequest)(nil),        // 7: admin.RemoveBackendRequest
-	(*UpdateBackendRequest)(nil),        // 8: admin.UpdateBackendRequest
-	(*MetricsResponse)(nil),             // 9: admin.MetricsResponse
-	(*GlobalConfig)(nil),                // 10: admin.GlobalConfig
-	(*SecurityConfigResponse)(nil),      // 11: admin.SecurityConfigResponse
-	(*UpdateSecurityConfigRequest)(nil), // 12: admin.UpdateSecurityConfigRequest
-	(*RateLimitingConfig)(nil),          // 13: admin.RateLimitingConfig
-	(*GetVirtualHostsResponse)(nil),     // 14: admin.GetVirtualHostsResponse
-	(*GetVirtualHostRequest)(nil),       // 15: admin.GetVirtualHostRequest
-	(*PathRoute)(nil),                   // 16: admin.PathRoute
-	(*VirtualHost)(nil),                 // 17: admin.VirtualHost
-	(*AddVirtualHostRequest)(nil),       // 18: admin.AddVirtualHostRequest
-	(*RemoveVirtualHostRequest)(nil),    // 19: admin.RemoveVirtualHostRequest
-	(*UpdateVirtualHostRequest)(nil),    // 20: admin.UpdateVirtualHostRequest
-	nil,                                 // 21: admin.MetricsResponse.RequestsPerBackendEntry
-	nil,                                 // 22: admin.MetricsResponse.FailedPerBackendEntry
-	nil,                                 // 23: admin.MetricsResponse.AvgLatencyPerBackendEntry
-	nil,                                 // 24: admin.MetricsResponse.ActiveConnectionsEntry
-	nil,                                 // 25: admin.MetricsResponse.TimeoutsPerBackendEntry
-	nil,                                 // 26: admin.MetricsResponse.HealthChecksPerBackendEntry
-	nil,                                 // 27: admin.MetricsResponse.FailedHealthChecksEntry
-	nil,                                 // 28: admin.MetricsResponse.StatusCodesEntry
-	nil,                                 // 29: admin.MetricsResponse.MethodsCountEntry
+	(*Empty)(nil),                               // 0: admin.Empty
+	(*BasicResponse)(nil),                       // 1: admin.BasicResponse
+	(*Backend)(nil),                             // 2: admin.Backend
+	(*BackendResponse)(nil),                     // 3: admin.BackendResponse
+	(*GetBackendsResponse)(nil),                 // 4: admin.GetBackendsResponse
+	(*GetBackendRequest)(nil),                   // 5: admin.GetBackendRequest
+	(*AddBackendRequest)(nil),                   // 6: admin.AddBackendRequest
+	(*RemoveBackendRequest)(nil),                // 7: admin.RemoveBackendRequest
+	(*UpdateBackendRequest)(nil),                // 8: admin.UpdateBackendRequest
+	(*MetricsResponse)(nil),                     // 9: admin.MetricsResponse
+	(*ServerConfig)(nil),                        // 10: admin.ServerConfig
+	(*LoadBalancerConfig)(nil),                  // 11: admin.LoadBalancerConfig
+	(*SetVirtualHostSecurityPolicyRequest)(nil), // 12: admin.SetVirtualHostSecurityPolicyRequest
+	(*UpsertPolicyRequest)(nil),                 // 13: admin.UpsertPolicyRequest
+	(*GetPoliciesResponse)(nil),                 // 14: admin.GetPoliciesResponse
+	(*SecurityPolicy)(nil),                      // 15: admin.SecurityPolicy
+	(*RateLimitingConfig)(nil),                  // 16: admin.RateLimitingConfig
+	(*GetVirtualHostsResponse)(nil),             // 17: admin.GetVirtualHostsResponse
+	(*GetVirtualHostRequest)(nil),               // 18: admin.GetVirtualHostRequest
+	(*PathRoute)(nil),                           // 19: admin.PathRoute
+	(*VirtualHost)(nil),                         // 20: admin.VirtualHost
+	(*VirtualHostSecurityResponse)(nil),         // 21: admin.VirtualHostSecurityResponse
+	(*AddVirtualHostRequest)(nil),               // 22: admin.AddVirtualHostRequest
+	(*RemoveVirtualHostRequest)(nil),            // 23: admin.RemoveVirtualHostRequest
+	(*UpdateVirtualHostRequest)(nil),            // 24: admin.UpdateVirtualHostRequest
+	nil,                                         // 25: admin.MetricsResponse.RequestsPerBackendEntry
+	nil,                                         // 26: admin.MetricsResponse.FailedPerBackendEntry
+	nil,                                         // 27: admin.MetricsResponse.AvgLatencyPerBackendEntry
+	nil,                                         // 28: admin.MetricsResponse.ActiveConnectionsEntry
+	nil,                                         // 29: admin.MetricsResponse.TimeoutsPerBackendEntry
+	nil,                                         // 30: admin.MetricsResponse.HealthChecksPerBackendEntry
+	nil,                                         // 31: admin.MetricsResponse.FailedHealthChecksEntry
+	nil,                                         // 32: admin.MetricsResponse.StatusCodesEntry
+	nil,                                         // 33: admin.MetricsResponse.MethodsCountEntry
 }
 var file_admin_proto_depIdxs = []int32{
 	3,  // 0: admin.GetBackendsResponse.backends:type_name -> admin.BackendResponse
-	21, // 1: admin.MetricsResponse.requests_per_backend:type_name -> admin.MetricsResponse.RequestsPerBackendEntry
-	22, // 2: admin.MetricsResponse.failed_per_backend:type_name -> admin.MetricsResponse.FailedPerBackendEntry
-	23, // 3: admin.MetricsResponse.avg_latency_per_backend:type_name -> admin.MetricsResponse.AvgLatencyPerBackendEntry
-	24, // 4: admin.MetricsResponse.active_connections:type_name -> admin.MetricsResponse.ActiveConnectionsEntry
-	25, // 5: admin.MetricsResponse.timeouts_per_backend:type_name -> admin.MetricsResponse.TimeoutsPerBackendEntry
-	26, // 6: admin.MetricsResponse.health_checks_per_backend:type_name -> admin.MetricsResponse.HealthChecksPerBackendEntry
-	27, // 7: admin.MetricsResponse.failed_health_checks:type_name -> admin.MetricsResponse.FailedHealthChecksEntry
-	28, // 8: admin.MetricsResponse.status_codes:type_name -> admin.MetricsResponse.StatusCodesEntry
-	29, // 9: admin.MetricsResponse.methods_count:type_name -> admin.MetricsResponse.MethodsCountEntry
-	13, // 10: admin.SecurityConfigResponse.rate_limiting:type_name -> admin.RateLimitingConfig
-	11, // 11: admin.UpdateSecurityConfigRequest.config:type_name -> admin.SecurityConfigResponse
-	17, // 12: admin.GetVirtualHostsResponse.virtual_hosts:type_name -> admin.VirtualHost
-	16, // 13: admin.VirtualHost.path_routes:type_name -> admin.PathRoute
-	11, // 14: admin.VirtualHost.security_config:type_name -> admin.SecurityConfigResponse
-	17, // 15: admin.AddVirtualHostRequest.vhost:type_name -> admin.VirtualHost
-	17, // 16: admin.UpdateVirtualHostRequest.vhost:type_name -> admin.VirtualHost
-	0,  // 17: admin.ProxyAdmin.GetBackends:input_type -> admin.Empty
-	5,  // 18: admin.ProxyAdmin.GetBackend:input_type -> admin.GetBackendRequest
-	6,  // 19: admin.ProxyAdmin.AddBackend:input_type -> admin.AddBackendRequest
-	7,  // 20: admin.ProxyAdmin.RemoveBackend:input_type -> admin.RemoveBackendRequest
-	8,  // 21: admin.ProxyAdmin.UpdateBackend:input_type -> admin.UpdateBackendRequest
-	0,  // 22: admin.ProxyAdmin.GetVirtualHosts:input_type -> admin.Empty
-	15, // 23: admin.ProxyAdmin.GetVirtualHost:input_type -> admin.GetVirtualHostRequest
-	18, // 24: admin.ProxyAdmin.AddVirtualHost:input_type -> admin.AddVirtualHostRequest
-	19, // 25: admin.ProxyAdmin.RemoveVirtualHost:input_type -> admin.RemoveVirtualHostRequest
-	20, // 26: admin.ProxyAdmin.UpdateVirtualHost:input_type -> admin.UpdateVirtualHostRequest
-	15, // 27: admin.ProxyAdmin.GetVirtualHostSecurityConfig:input_type -> admin.GetVirtualHostRequest
-	12, // 28: admin.ProxyAdmin.UpdateVirtualHostSecurityConfig:input_type -> admin.UpdateSecurityConfigRequest
-	0,  // 29: admin.ProxyAdmin.GetGlobalConfig:input_type -> admin.Empty
-	10, // 30: admin.ProxyAdmin.SetGlobalConfig:input_type -> admin.GlobalConfig
-	0,  // 31: admin.ProxyAdmin.GetMetrics:input_type -> admin.Empty
-	4,  // 32: admin.ProxyAdmin.GetBackends:output_type -> admin.GetBackendsResponse
-	3,  // 33: admin.ProxyAdmin.GetBackend:output_type -> admin.BackendResponse
-	1,  // 34: admin.ProxyAdmin.AddBackend:output_type -> admin.BasicResponse
-	1,  // 35: admin.ProxyAdmin.RemoveBackend:output_type -> admin.BasicResponse
-	1,  // 36: admin.ProxyAdmin.UpdateBackend:output_type -> admin.BasicResponse
-	14, // 37: admin.ProxyAdmin.GetVirtualHosts:output_type -> admin.GetVirtualHostsResponse
-	17, // 38: admin.ProxyAdmin.GetVirtualHost:output_type -> admin.VirtualHost
-	1,  // 39: admin.ProxyAdmin.AddVirtualHost:output_type -> admin.BasicResponse
-	1,  // 40: admin.ProxyAdmin.RemoveVirtualHost:output_type -> admin.BasicResponse
-	1,  // 41: admin.ProxyAdmin.UpdateVirtualHost:output_type -> admin.BasicResponse
-	11, // 42: admin.ProxyAdmin.GetVirtualHostSecurityConfig:output_type -> admin.SecurityConfigResponse
-	1,  // 43: admin.ProxyAdmin.UpdateVirtualHostSecurityConfig:output_type -> admin.BasicResponse
-	10, // 44: admin.ProxyAdmin.GetGlobalConfig:output_type -> admin.GlobalConfig
-	1,  // 45: admin.ProxyAdmin.SetGlobalConfig:output_type -> admin.BasicResponse
-	9,  // 46: admin.ProxyAdmin.GetMetrics:output_type -> admin.MetricsResponse
-	32, // [32:47] is the sub-list for method output_type
-	17, // [17:32] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	25, // 1: admin.MetricsResponse.requests_per_backend:type_name -> admin.MetricsResponse.RequestsPerBackendEntry
+	26, // 2: admin.MetricsResponse.failed_per_backend:type_name -> admin.MetricsResponse.FailedPerBackendEntry
+	27, // 3: admin.MetricsResponse.avg_latency_per_backend:type_name -> admin.MetricsResponse.AvgLatencyPerBackendEntry
+	28, // 4: admin.MetricsResponse.active_connections:type_name -> admin.MetricsResponse.ActiveConnectionsEntry
+	29, // 5: admin.MetricsResponse.timeouts_per_backend:type_name -> admin.MetricsResponse.TimeoutsPerBackendEntry
+	30, // 6: admin.MetricsResponse.health_checks_per_backend:type_name -> admin.MetricsResponse.HealthChecksPerBackendEntry
+	31, // 7: admin.MetricsResponse.failed_health_checks:type_name -> admin.MetricsResponse.FailedHealthChecksEntry
+	32, // 8: admin.MetricsResponse.status_codes:type_name -> admin.MetricsResponse.StatusCodesEntry
+	33, // 9: admin.MetricsResponse.methods_count:type_name -> admin.MetricsResponse.MethodsCountEntry
+	15, // 10: admin.UpsertPolicyRequest.policy:type_name -> admin.SecurityPolicy
+	15, // 11: admin.GetPoliciesResponse.policies:type_name -> admin.SecurityPolicy
+	16, // 12: admin.SecurityPolicy.rate_limiting:type_name -> admin.RateLimitingConfig
+	20, // 13: admin.GetVirtualHostsResponse.virtual_hosts:type_name -> admin.VirtualHost
+	19, // 14: admin.VirtualHost.path_routes:type_name -> admin.PathRoute
+	15, // 15: admin.VirtualHostSecurityResponse.policy:type_name -> admin.SecurityPolicy
+	20, // 16: admin.AddVirtualHostRequest.virtual_host:type_name -> admin.VirtualHost
+	20, // 17: admin.UpdateVirtualHostRequest.virtual_host:type_name -> admin.VirtualHost
+	0,  // 18: admin.ProxyAdmin.GetBackends:input_type -> admin.Empty
+	5,  // 19: admin.ProxyAdmin.GetBackend:input_type -> admin.GetBackendRequest
+	6,  // 20: admin.ProxyAdmin.AddBackend:input_type -> admin.AddBackendRequest
+	7,  // 21: admin.ProxyAdmin.RemoveBackend:input_type -> admin.RemoveBackendRequest
+	8,  // 22: admin.ProxyAdmin.UpdateBackend:input_type -> admin.UpdateBackendRequest
+	0,  // 23: admin.ProxyAdmin.GetVirtualHosts:input_type -> admin.Empty
+	18, // 24: admin.ProxyAdmin.GetVirtualHost:input_type -> admin.GetVirtualHostRequest
+	18, // 25: admin.ProxyAdmin.GetVirtualHostSecurity:input_type -> admin.GetVirtualHostRequest
+	12, // 26: admin.ProxyAdmin.SetVirtualHostSecurityPolicy:input_type -> admin.SetVirtualHostSecurityPolicyRequest
+	22, // 27: admin.ProxyAdmin.AddVirtualHost:input_type -> admin.AddVirtualHostRequest
+	23, // 28: admin.ProxyAdmin.RemoveVirtualHost:input_type -> admin.RemoveVirtualHostRequest
+	24, // 29: admin.ProxyAdmin.UpdateVirtualHost:input_type -> admin.UpdateVirtualHostRequest
+	0,  // 30: admin.ProxyAdmin.GetServerConfig:input_type -> admin.Empty
+	10, // 31: admin.ProxyAdmin.SetServerConfig:input_type -> admin.ServerConfig
+	0,  // 32: admin.ProxyAdmin.GetLoadBalancer:input_type -> admin.Empty
+	11, // 33: admin.ProxyAdmin.SetLoadBalancer:input_type -> admin.LoadBalancerConfig
+	0,  // 34: admin.ProxyAdmin.GetPolicies:input_type -> admin.Empty
+	13, // 35: admin.ProxyAdmin.UpsertPolicy:input_type -> admin.UpsertPolicyRequest
+	0,  // 36: admin.ProxyAdmin.GetMetrics:input_type -> admin.Empty
+	4,  // 37: admin.ProxyAdmin.GetBackends:output_type -> admin.GetBackendsResponse
+	3,  // 38: admin.ProxyAdmin.GetBackend:output_type -> admin.BackendResponse
+	1,  // 39: admin.ProxyAdmin.AddBackend:output_type -> admin.BasicResponse
+	1,  // 40: admin.ProxyAdmin.RemoveBackend:output_type -> admin.BasicResponse
+	1,  // 41: admin.ProxyAdmin.UpdateBackend:output_type -> admin.BasicResponse
+	17, // 42: admin.ProxyAdmin.GetVirtualHosts:output_type -> admin.GetVirtualHostsResponse
+	20, // 43: admin.ProxyAdmin.GetVirtualHost:output_type -> admin.VirtualHost
+	21, // 44: admin.ProxyAdmin.GetVirtualHostSecurity:output_type -> admin.VirtualHostSecurityResponse
+	1,  // 45: admin.ProxyAdmin.SetVirtualHostSecurityPolicy:output_type -> admin.BasicResponse
+	1,  // 46: admin.ProxyAdmin.AddVirtualHost:output_type -> admin.BasicResponse
+	1,  // 47: admin.ProxyAdmin.RemoveVirtualHost:output_type -> admin.BasicResponse
+	1,  // 48: admin.ProxyAdmin.UpdateVirtualHost:output_type -> admin.BasicResponse
+	10, // 49: admin.ProxyAdmin.GetServerConfig:output_type -> admin.ServerConfig
+	1,  // 50: admin.ProxyAdmin.SetServerConfig:output_type -> admin.BasicResponse
+	11, // 51: admin.ProxyAdmin.GetLoadBalancer:output_type -> admin.LoadBalancerConfig
+	1,  // 52: admin.ProxyAdmin.SetLoadBalancer:output_type -> admin.BasicResponse
+	14, // 53: admin.ProxyAdmin.GetPolicies:output_type -> admin.GetPoliciesResponse
+	1,  // 54: admin.ProxyAdmin.UpsertPolicy:output_type -> admin.BasicResponse
+	9,  // 55: admin.ProxyAdmin.GetMetrics:output_type -> admin.MetricsResponse
+	37, // [37:56] is the sub-list for method output_type
+	18, // [18:37] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_admin_proto_init() }
@@ -1539,7 +1814,7 @@ func file_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_admin_proto_rawDesc), len(file_admin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   30,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

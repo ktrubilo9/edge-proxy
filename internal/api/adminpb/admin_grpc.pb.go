@@ -19,21 +19,25 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ProxyAdmin_GetBackends_FullMethodName                     = "/admin.ProxyAdmin/GetBackends"
-	ProxyAdmin_GetBackend_FullMethodName                      = "/admin.ProxyAdmin/GetBackend"
-	ProxyAdmin_AddBackend_FullMethodName                      = "/admin.ProxyAdmin/AddBackend"
-	ProxyAdmin_RemoveBackend_FullMethodName                   = "/admin.ProxyAdmin/RemoveBackend"
-	ProxyAdmin_UpdateBackend_FullMethodName                   = "/admin.ProxyAdmin/UpdateBackend"
-	ProxyAdmin_GetVirtualHosts_FullMethodName                 = "/admin.ProxyAdmin/GetVirtualHosts"
-	ProxyAdmin_GetVirtualHost_FullMethodName                  = "/admin.ProxyAdmin/GetVirtualHost"
-	ProxyAdmin_AddVirtualHost_FullMethodName                  = "/admin.ProxyAdmin/AddVirtualHost"
-	ProxyAdmin_RemoveVirtualHost_FullMethodName               = "/admin.ProxyAdmin/RemoveVirtualHost"
-	ProxyAdmin_UpdateVirtualHost_FullMethodName               = "/admin.ProxyAdmin/UpdateVirtualHost"
-	ProxyAdmin_GetVirtualHostSecurityConfig_FullMethodName    = "/admin.ProxyAdmin/GetVirtualHostSecurityConfig"
-	ProxyAdmin_UpdateVirtualHostSecurityConfig_FullMethodName = "/admin.ProxyAdmin/UpdateVirtualHostSecurityConfig"
-	ProxyAdmin_GetGlobalConfig_FullMethodName                 = "/admin.ProxyAdmin/GetGlobalConfig"
-	ProxyAdmin_SetGlobalConfig_FullMethodName                 = "/admin.ProxyAdmin/SetGlobalConfig"
-	ProxyAdmin_GetMetrics_FullMethodName                      = "/admin.ProxyAdmin/GetMetrics"
+	ProxyAdmin_GetBackends_FullMethodName                  = "/admin.ProxyAdmin/GetBackends"
+	ProxyAdmin_GetBackend_FullMethodName                   = "/admin.ProxyAdmin/GetBackend"
+	ProxyAdmin_AddBackend_FullMethodName                   = "/admin.ProxyAdmin/AddBackend"
+	ProxyAdmin_RemoveBackend_FullMethodName                = "/admin.ProxyAdmin/RemoveBackend"
+	ProxyAdmin_UpdateBackend_FullMethodName                = "/admin.ProxyAdmin/UpdateBackend"
+	ProxyAdmin_GetVirtualHosts_FullMethodName              = "/admin.ProxyAdmin/GetVirtualHosts"
+	ProxyAdmin_GetVirtualHost_FullMethodName               = "/admin.ProxyAdmin/GetVirtualHost"
+	ProxyAdmin_GetVirtualHostSecurity_FullMethodName       = "/admin.ProxyAdmin/GetVirtualHostSecurity"
+	ProxyAdmin_SetVirtualHostSecurityPolicy_FullMethodName = "/admin.ProxyAdmin/SetVirtualHostSecurityPolicy"
+	ProxyAdmin_AddVirtualHost_FullMethodName               = "/admin.ProxyAdmin/AddVirtualHost"
+	ProxyAdmin_RemoveVirtualHost_FullMethodName            = "/admin.ProxyAdmin/RemoveVirtualHost"
+	ProxyAdmin_UpdateVirtualHost_FullMethodName            = "/admin.ProxyAdmin/UpdateVirtualHost"
+	ProxyAdmin_GetServerConfig_FullMethodName              = "/admin.ProxyAdmin/GetServerConfig"
+	ProxyAdmin_SetServerConfig_FullMethodName              = "/admin.ProxyAdmin/SetServerConfig"
+	ProxyAdmin_GetLoadBalancer_FullMethodName              = "/admin.ProxyAdmin/GetLoadBalancer"
+	ProxyAdmin_SetLoadBalancer_FullMethodName              = "/admin.ProxyAdmin/SetLoadBalancer"
+	ProxyAdmin_GetPolicies_FullMethodName                  = "/admin.ProxyAdmin/GetPolicies"
+	ProxyAdmin_UpsertPolicy_FullMethodName                 = "/admin.ProxyAdmin/UpsertPolicy"
+	ProxyAdmin_GetMetrics_FullMethodName                   = "/admin.ProxyAdmin/GetMetrics"
 )
 
 // ProxyAdminClient is the client API for ProxyAdmin service.
@@ -49,14 +53,20 @@ type ProxyAdminClient interface {
 	// virtual hosts
 	GetVirtualHosts(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetVirtualHostsResponse, error)
 	GetVirtualHost(ctx context.Context, in *GetVirtualHostRequest, opts ...grpc.CallOption) (*VirtualHost, error)
+	GetVirtualHostSecurity(ctx context.Context, in *GetVirtualHostRequest, opts ...grpc.CallOption) (*VirtualHostSecurityResponse, error)
+	SetVirtualHostSecurityPolicy(ctx context.Context, in *SetVirtualHostSecurityPolicyRequest, opts ...grpc.CallOption) (*BasicResponse, error)
 	AddVirtualHost(ctx context.Context, in *AddVirtualHostRequest, opts ...grpc.CallOption) (*BasicResponse, error)
 	RemoveVirtualHost(ctx context.Context, in *RemoveVirtualHostRequest, opts ...grpc.CallOption) (*BasicResponse, error)
 	UpdateVirtualHost(ctx context.Context, in *UpdateVirtualHostRequest, opts ...grpc.CallOption) (*BasicResponse, error)
-	GetVirtualHostSecurityConfig(ctx context.Context, in *GetVirtualHostRequest, opts ...grpc.CallOption) (*SecurityConfigResponse, error)
-	UpdateVirtualHostSecurityConfig(ctx context.Context, in *UpdateSecurityConfigRequest, opts ...grpc.CallOption) (*BasicResponse, error)
-	// global
-	GetGlobalConfig(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GlobalConfig, error)
-	SetGlobalConfig(ctx context.Context, in *GlobalConfig, opts ...grpc.CallOption) (*BasicResponse, error)
+	// server
+	GetServerConfig(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ServerConfig, error)
+	SetServerConfig(ctx context.Context, in *ServerConfig, opts ...grpc.CallOption) (*BasicResponse, error)
+	// load balancer
+	GetLoadBalancer(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*LoadBalancerConfig, error)
+	SetLoadBalancer(ctx context.Context, in *LoadBalancerConfig, opts ...grpc.CallOption) (*BasicResponse, error)
+	// security
+	GetPolicies(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetPoliciesResponse, error)
+	UpsertPolicy(ctx context.Context, in *UpsertPolicyRequest, opts ...grpc.CallOption) (*BasicResponse, error)
 	// metrics
 	GetMetrics(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*MetricsResponse, error)
 }
@@ -139,6 +149,26 @@ func (c *proxyAdminClient) GetVirtualHost(ctx context.Context, in *GetVirtualHos
 	return out, nil
 }
 
+func (c *proxyAdminClient) GetVirtualHostSecurity(ctx context.Context, in *GetVirtualHostRequest, opts ...grpc.CallOption) (*VirtualHostSecurityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VirtualHostSecurityResponse)
+	err := c.cc.Invoke(ctx, ProxyAdmin_GetVirtualHostSecurity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *proxyAdminClient) SetVirtualHostSecurityPolicy(ctx context.Context, in *SetVirtualHostSecurityPolicyRequest, opts ...grpc.CallOption) (*BasicResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BasicResponse)
+	err := c.cc.Invoke(ctx, ProxyAdmin_SetVirtualHostSecurityPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *proxyAdminClient) AddVirtualHost(ctx context.Context, in *AddVirtualHostRequest, opts ...grpc.CallOption) (*BasicResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BasicResponse)
@@ -169,40 +199,60 @@ func (c *proxyAdminClient) UpdateVirtualHost(ctx context.Context, in *UpdateVirt
 	return out, nil
 }
 
-func (c *proxyAdminClient) GetVirtualHostSecurityConfig(ctx context.Context, in *GetVirtualHostRequest, opts ...grpc.CallOption) (*SecurityConfigResponse, error) {
+func (c *proxyAdminClient) GetServerConfig(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ServerConfig, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SecurityConfigResponse)
-	err := c.cc.Invoke(ctx, ProxyAdmin_GetVirtualHostSecurityConfig_FullMethodName, in, out, cOpts...)
+	out := new(ServerConfig)
+	err := c.cc.Invoke(ctx, ProxyAdmin_GetServerConfig_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *proxyAdminClient) UpdateVirtualHostSecurityConfig(ctx context.Context, in *UpdateSecurityConfigRequest, opts ...grpc.CallOption) (*BasicResponse, error) {
+func (c *proxyAdminClient) SetServerConfig(ctx context.Context, in *ServerConfig, opts ...grpc.CallOption) (*BasicResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BasicResponse)
-	err := c.cc.Invoke(ctx, ProxyAdmin_UpdateVirtualHostSecurityConfig_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ProxyAdmin_SetServerConfig_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *proxyAdminClient) GetGlobalConfig(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GlobalConfig, error) {
+func (c *proxyAdminClient) GetLoadBalancer(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*LoadBalancerConfig, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GlobalConfig)
-	err := c.cc.Invoke(ctx, ProxyAdmin_GetGlobalConfig_FullMethodName, in, out, cOpts...)
+	out := new(LoadBalancerConfig)
+	err := c.cc.Invoke(ctx, ProxyAdmin_GetLoadBalancer_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *proxyAdminClient) SetGlobalConfig(ctx context.Context, in *GlobalConfig, opts ...grpc.CallOption) (*BasicResponse, error) {
+func (c *proxyAdminClient) SetLoadBalancer(ctx context.Context, in *LoadBalancerConfig, opts ...grpc.CallOption) (*BasicResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BasicResponse)
-	err := c.cc.Invoke(ctx, ProxyAdmin_SetGlobalConfig_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ProxyAdmin_SetLoadBalancer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *proxyAdminClient) GetPolicies(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetPoliciesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPoliciesResponse)
+	err := c.cc.Invoke(ctx, ProxyAdmin_GetPolicies_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *proxyAdminClient) UpsertPolicy(ctx context.Context, in *UpsertPolicyRequest, opts ...grpc.CallOption) (*BasicResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BasicResponse)
+	err := c.cc.Invoke(ctx, ProxyAdmin_UpsertPolicy_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -232,14 +282,20 @@ type ProxyAdminServer interface {
 	// virtual hosts
 	GetVirtualHosts(context.Context, *Empty) (*GetVirtualHostsResponse, error)
 	GetVirtualHost(context.Context, *GetVirtualHostRequest) (*VirtualHost, error)
+	GetVirtualHostSecurity(context.Context, *GetVirtualHostRequest) (*VirtualHostSecurityResponse, error)
+	SetVirtualHostSecurityPolicy(context.Context, *SetVirtualHostSecurityPolicyRequest) (*BasicResponse, error)
 	AddVirtualHost(context.Context, *AddVirtualHostRequest) (*BasicResponse, error)
 	RemoveVirtualHost(context.Context, *RemoveVirtualHostRequest) (*BasicResponse, error)
 	UpdateVirtualHost(context.Context, *UpdateVirtualHostRequest) (*BasicResponse, error)
-	GetVirtualHostSecurityConfig(context.Context, *GetVirtualHostRequest) (*SecurityConfigResponse, error)
-	UpdateVirtualHostSecurityConfig(context.Context, *UpdateSecurityConfigRequest) (*BasicResponse, error)
-	// global
-	GetGlobalConfig(context.Context, *Empty) (*GlobalConfig, error)
-	SetGlobalConfig(context.Context, *GlobalConfig) (*BasicResponse, error)
+	// server
+	GetServerConfig(context.Context, *Empty) (*ServerConfig, error)
+	SetServerConfig(context.Context, *ServerConfig) (*BasicResponse, error)
+	// load balancer
+	GetLoadBalancer(context.Context, *Empty) (*LoadBalancerConfig, error)
+	SetLoadBalancer(context.Context, *LoadBalancerConfig) (*BasicResponse, error)
+	// security
+	GetPolicies(context.Context, *Empty) (*GetPoliciesResponse, error)
+	UpsertPolicy(context.Context, *UpsertPolicyRequest) (*BasicResponse, error)
 	// metrics
 	GetMetrics(context.Context, *Empty) (*MetricsResponse, error)
 	mustEmbedUnimplementedProxyAdminServer()
@@ -273,6 +329,12 @@ func (UnimplementedProxyAdminServer) GetVirtualHosts(context.Context, *Empty) (*
 func (UnimplementedProxyAdminServer) GetVirtualHost(context.Context, *GetVirtualHostRequest) (*VirtualHost, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVirtualHost not implemented")
 }
+func (UnimplementedProxyAdminServer) GetVirtualHostSecurity(context.Context, *GetVirtualHostRequest) (*VirtualHostSecurityResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVirtualHostSecurity not implemented")
+}
+func (UnimplementedProxyAdminServer) SetVirtualHostSecurityPolicy(context.Context, *SetVirtualHostSecurityPolicyRequest) (*BasicResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetVirtualHostSecurityPolicy not implemented")
+}
 func (UnimplementedProxyAdminServer) AddVirtualHost(context.Context, *AddVirtualHostRequest) (*BasicResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddVirtualHost not implemented")
 }
@@ -282,17 +344,23 @@ func (UnimplementedProxyAdminServer) RemoveVirtualHost(context.Context, *RemoveV
 func (UnimplementedProxyAdminServer) UpdateVirtualHost(context.Context, *UpdateVirtualHostRequest) (*BasicResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateVirtualHost not implemented")
 }
-func (UnimplementedProxyAdminServer) GetVirtualHostSecurityConfig(context.Context, *GetVirtualHostRequest) (*SecurityConfigResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetVirtualHostSecurityConfig not implemented")
+func (UnimplementedProxyAdminServer) GetServerConfig(context.Context, *Empty) (*ServerConfig, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetServerConfig not implemented")
 }
-func (UnimplementedProxyAdminServer) UpdateVirtualHostSecurityConfig(context.Context, *UpdateSecurityConfigRequest) (*BasicResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateVirtualHostSecurityConfig not implemented")
+func (UnimplementedProxyAdminServer) SetServerConfig(context.Context, *ServerConfig) (*BasicResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetServerConfig not implemented")
 }
-func (UnimplementedProxyAdminServer) GetGlobalConfig(context.Context, *Empty) (*GlobalConfig, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetGlobalConfig not implemented")
+func (UnimplementedProxyAdminServer) GetLoadBalancer(context.Context, *Empty) (*LoadBalancerConfig, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetLoadBalancer not implemented")
 }
-func (UnimplementedProxyAdminServer) SetGlobalConfig(context.Context, *GlobalConfig) (*BasicResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetGlobalConfig not implemented")
+func (UnimplementedProxyAdminServer) SetLoadBalancer(context.Context, *LoadBalancerConfig) (*BasicResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetLoadBalancer not implemented")
+}
+func (UnimplementedProxyAdminServer) GetPolicies(context.Context, *Empty) (*GetPoliciesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPolicies not implemented")
+}
+func (UnimplementedProxyAdminServer) UpsertPolicy(context.Context, *UpsertPolicyRequest) (*BasicResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpsertPolicy not implemented")
 }
 func (UnimplementedProxyAdminServer) GetMetrics(context.Context, *Empty) (*MetricsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMetrics not implemented")
@@ -444,6 +512,42 @@ func _ProxyAdmin_GetVirtualHost_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProxyAdmin_GetVirtualHostSecurity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVirtualHostRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProxyAdminServer).GetVirtualHostSecurity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProxyAdmin_GetVirtualHostSecurity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProxyAdminServer).GetVirtualHostSecurity(ctx, req.(*GetVirtualHostRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProxyAdmin_SetVirtualHostSecurityPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetVirtualHostSecurityPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProxyAdminServer).SetVirtualHostSecurityPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProxyAdmin_SetVirtualHostSecurityPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProxyAdminServer).SetVirtualHostSecurityPolicy(ctx, req.(*SetVirtualHostSecurityPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProxyAdmin_AddVirtualHost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddVirtualHostRequest)
 	if err := dec(in); err != nil {
@@ -498,74 +602,110 @@ func _ProxyAdmin_UpdateVirtualHost_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProxyAdmin_GetVirtualHostSecurityConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetVirtualHostRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ProxyAdminServer).GetVirtualHostSecurityConfig(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ProxyAdmin_GetVirtualHostSecurityConfig_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProxyAdminServer).GetVirtualHostSecurityConfig(ctx, req.(*GetVirtualHostRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ProxyAdmin_UpdateVirtualHostSecurityConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateSecurityConfigRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ProxyAdminServer).UpdateVirtualHostSecurityConfig(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ProxyAdmin_UpdateVirtualHostSecurityConfig_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProxyAdminServer).UpdateVirtualHostSecurityConfig(ctx, req.(*UpdateSecurityConfigRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ProxyAdmin_GetGlobalConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ProxyAdmin_GetServerConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProxyAdminServer).GetGlobalConfig(ctx, in)
+		return srv.(ProxyAdminServer).GetServerConfig(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProxyAdmin_GetGlobalConfig_FullMethodName,
+		FullMethod: ProxyAdmin_GetServerConfig_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProxyAdminServer).GetGlobalConfig(ctx, req.(*Empty))
+		return srv.(ProxyAdminServer).GetServerConfig(ctx, req.(*Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProxyAdmin_SetGlobalConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GlobalConfig)
+func _ProxyAdmin_SetServerConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ServerConfig)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProxyAdminServer).SetGlobalConfig(ctx, in)
+		return srv.(ProxyAdminServer).SetServerConfig(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProxyAdmin_SetGlobalConfig_FullMethodName,
+		FullMethod: ProxyAdmin_SetServerConfig_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProxyAdminServer).SetGlobalConfig(ctx, req.(*GlobalConfig))
+		return srv.(ProxyAdminServer).SetServerConfig(ctx, req.(*ServerConfig))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProxyAdmin_GetLoadBalancer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProxyAdminServer).GetLoadBalancer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProxyAdmin_GetLoadBalancer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProxyAdminServer).GetLoadBalancer(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProxyAdmin_SetLoadBalancer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LoadBalancerConfig)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProxyAdminServer).SetLoadBalancer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProxyAdmin_SetLoadBalancer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProxyAdminServer).SetLoadBalancer(ctx, req.(*LoadBalancerConfig))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProxyAdmin_GetPolicies_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProxyAdminServer).GetPolicies(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProxyAdmin_GetPolicies_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProxyAdminServer).GetPolicies(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProxyAdmin_UpsertPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProxyAdminServer).UpsertPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProxyAdmin_UpsertPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProxyAdminServer).UpsertPolicy(ctx, req.(*UpsertPolicyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -624,6 +764,14 @@ var ProxyAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProxyAdmin_GetVirtualHost_Handler,
 		},
 		{
+			MethodName: "GetVirtualHostSecurity",
+			Handler:    _ProxyAdmin_GetVirtualHostSecurity_Handler,
+		},
+		{
+			MethodName: "SetVirtualHostSecurityPolicy",
+			Handler:    _ProxyAdmin_SetVirtualHostSecurityPolicy_Handler,
+		},
+		{
 			MethodName: "AddVirtualHost",
 			Handler:    _ProxyAdmin_AddVirtualHost_Handler,
 		},
@@ -636,20 +784,28 @@ var ProxyAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProxyAdmin_UpdateVirtualHost_Handler,
 		},
 		{
-			MethodName: "GetVirtualHostSecurityConfig",
-			Handler:    _ProxyAdmin_GetVirtualHostSecurityConfig_Handler,
+			MethodName: "GetServerConfig",
+			Handler:    _ProxyAdmin_GetServerConfig_Handler,
 		},
 		{
-			MethodName: "UpdateVirtualHostSecurityConfig",
-			Handler:    _ProxyAdmin_UpdateVirtualHostSecurityConfig_Handler,
+			MethodName: "SetServerConfig",
+			Handler:    _ProxyAdmin_SetServerConfig_Handler,
 		},
 		{
-			MethodName: "GetGlobalConfig",
-			Handler:    _ProxyAdmin_GetGlobalConfig_Handler,
+			MethodName: "GetLoadBalancer",
+			Handler:    _ProxyAdmin_GetLoadBalancer_Handler,
 		},
 		{
-			MethodName: "SetGlobalConfig",
-			Handler:    _ProxyAdmin_SetGlobalConfig_Handler,
+			MethodName: "SetLoadBalancer",
+			Handler:    _ProxyAdmin_SetLoadBalancer_Handler,
+		},
+		{
+			MethodName: "GetPolicies",
+			Handler:    _ProxyAdmin_GetPolicies_Handler,
+		},
+		{
+			MethodName: "UpsertPolicy",
+			Handler:    _ProxyAdmin_UpsertPolicy_Handler,
 		},
 		{
 			MethodName: "GetMetrics",

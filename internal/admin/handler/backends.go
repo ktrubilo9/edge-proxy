@@ -25,9 +25,9 @@ func HandleBackendsList(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 
 func HandleBackendGet(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		url := r.PathValue("url")
-		if url == "" {
-			http.Error(w, "Missing url in path", http.StatusBadRequest)
+		id := r.PathValue("id")
+		if id == "" {
+			http.Error(w, "Missing id in path", http.StatusBadRequest)
 			return
 		}
 
@@ -35,7 +35,7 @@ func HandleBackendGet(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 		defer cancel()
 		logRequest(r)
 
-		req := &adminpb.GetBackendRequest{Url: url}
+		req := &adminpb.GetBackendRequest{Id: id}
 		resp, err := proxyClient.GetBackend(ctx, req)
 		if err != nil {
 			http.Error(w, "Failed to get backend: "+err.Error(), http.StatusInternalServerError)
@@ -72,9 +72,9 @@ func HandleBackendAdd(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 
 func HandleBackendUpdate(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		url := r.PathValue("url")
-		if url == "" {
-			http.Error(w, "Missing url in path", http.StatusBadRequest)
+		id := r.PathValue("id")
+		if id == "" {
+			http.Error(w, "Missing id in path", http.StatusBadRequest)
 			return
 		}
 
@@ -87,7 +87,7 @@ func HandleBackendUpdate(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc 
 			http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		req.Url = url
+		req.Id = id
 
 		resp, err := proxyClient.UpdateBackend(ctx, &req)
 		if err != nil {
@@ -104,9 +104,9 @@ func HandleBackendUpdate(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc 
 
 func HandleBackendDelete(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		url := r.PathValue("url")
-		if url == "" {
-			http.Error(w, "Missing url in path", http.StatusBadRequest)
+		id := r.PathValue("id")
+		if id == "" {
+			http.Error(w, "Missing id in path", http.StatusBadRequest)
 			return
 		}
 
@@ -114,7 +114,7 @@ func HandleBackendDelete(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc 
 		defer cancel()
 		logRequest(r)
 
-		req := &adminpb.RemoveBackendRequest{Url: url}
+		req := &adminpb.RemoveBackendRequest{Id: id}
 		resp, err := proxyClient.RemoveBackend(ctx, req)
 		if err != nil {
 			http.Error(w, "Failed to remove backend: "+err.Error(), http.StatusInternalServerError)

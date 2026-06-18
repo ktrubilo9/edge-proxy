@@ -76,7 +76,7 @@ func (hc *HealthChecker) CheckBackend(b *config.BackendConfig) {
 }
 
 func (hc *HealthChecker) checkBackend(current *runtime.RuntimeState, b *config.BackendConfig) {
-	status, ok := current.BackendStatus(b.URL)
+	status, ok := current.BackendStatus(b.Id)
 	if !ok {
 		return
 	}
@@ -112,7 +112,7 @@ func (hc *HealthChecker) checkBackend(current *runtime.RuntimeState, b *config.B
 
 func (hc *HealthChecker) PerformHealthCheck(b *config.BackendConfig) bool {
 	current := hc.state.State()
-	status, ok := current.BackendStatus(b.URL)
+	status, ok := current.BackendStatus(b.Id)
 	if !ok {
 		return false
 	}
@@ -191,7 +191,7 @@ func recordError(status *runtime.BackendStatus, errMsg string) {
 
 func (hc *HealthChecker) UpdateBackendStatus(b *config.BackendConfig, healthy bool) {
 	current := hc.state.State()
-	status, ok := current.BackendStatus(b.URL)
+	status, ok := current.BackendStatus(b.Id)
 	if !ok {
 		return
 	}

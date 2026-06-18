@@ -5,6 +5,7 @@ import (
 	"edge-proxy/internal/lb"
 	"edge-proxy/internal/logger"
 	"edge-proxy/internal/metrics"
+	"edge-proxy/internal/view"
 	"net"
 	"net/http"
 	"sync"
@@ -83,33 +84,34 @@ func NewRuntime(configPath string) (*Runtime, error) {
 	return rt, nil
 }
 
-func (state *RuntimeState) BackendStatus(url string) (*BackendStatus, bool) {
+func (state *RuntimeState) BackendStatus(id string) (*BackendStatus, bool) {
 	if state == nil {
 		return nil, false
 	}
 
-	status, ok := state.backendStatuses[url]
+	status, ok := state.backendStatuses[id]
 	return status, ok
 }
 
-func (state *RuntimeState) Backends() []config.BackendResponse {
+func (state *RuntimeState) Backends() []view.BackendResponse {
 	if state == nil || state.Snapshot == nil || state.Snapshot.Raw == nil {
 		return nil
 	}
 
 	backends := state.Snapshot.Raw.Backends
-	resp := make([]config.BackendResponse, 0, len(backends))
+	resp := make([]view.BackendResponse, 0, len(backends))
 	for _, backend := range backends {
 		if backend == nil {
 			continue
 		}
 
-		item := config.BackendResponse{
+		item := view.BackendResponse{
+			Id:      backend.Id,
 			URL:     backend.URL,
 			Weight:  backend.Weight,
 			Enabled: backend.Enabled,
 		}
-		if status, ok := state.BackendStatus(backend.URL); ok {
+		if status, ok := state.BackendStatus(backend.Id); ok {
 			item.Active = status.Active.Load()
 			item.ErrorCount = status.ErrorCount.Load()
 			item.LastError = status.GetLastError()
@@ -121,22 +123,23 @@ func (state *RuntimeState) Backends() []config.BackendResponse {
 	return resp
 }
 
-func (state *RuntimeState) Backend(url string) *config.BackendResponse {
+func (state *RuntimeState) Backend(id string) *view.BackendResponse {
 	if state == nil || state.Snapshot == nil {
 		return nil
 	}
 
-	backend := state.Snapshot.BackendsByURL[url]
+	backend := state.Snapshot.BackendsById[id]
 	if backend == nil {
 		return nil
 	}
 
-	resp := &config.BackendResponse{
+	resp := &view.BackendResponse{
+		Id:      backend.Id,
 		URL:     backend.URL,
 		Weight:  backend.Weight,
 		Enabled: backend.Enabled,
 	}
-	if status, ok := state.BackendStatus(url); ok {
+	if status, ok := state.BackendStatus(id); ok {
 		resp.Active = status.Active.Load()
 		resp.ErrorCount = status.ErrorCount.Load()
 		resp.LastError = status.GetLastError()
@@ -164,9 +167,9 @@ func (rt *Runtime) buildRuntimeState(previous *RuntimeState, snapshot *config.Sn
 	if previous == nil ||
 		previous.Snapshot == nil ||
 		previous.LoadBalancer == nil ||
-		previous.Snapshot.Raw.LBStrategy != snapshot.Raw.LBStrategy {
+		previous.Snapshot.Raw.LoadBalancer.Strategy != snapshot.Raw.LoadBalancer.Strategy {
 		balancer = lb.GetLoadBalancer(
-			snapshot.Raw.LBStrategy,
+			snapshot.Raw.LoadBalancer.Strategy,
 			rt.Metrics,
 		)
 	}
@@ -256,14 +259,14 @@ func (rt *Runtime) deregisterRemovedBackendMetrics(previous, next *RuntimeState)
 
 	var nextBackends map[string]*config.BackendConfig
 	if next != nil && next.Snapshot != nil {
-		nextBackends = next.Snapshot.BackendsByURL
+		nextBackends = next.Snapshot.BackendsById
 	}
 
 	for _, backend := range previous.Snapshot.Raw.Backends {
 		if backend == nil {
 			continue
 		}
-		if nextBackends == nil || nextBackends[backend.URL] == nil {
+		if nextBackends == nil || nextBackends[backend.Id] == nil {
 			rt.Metrics.Backends.Deregister(backend.URL)
 		}
 	}
@@ -290,49 +293,62 @@ func (rt *Runtime) AddBackend(backend config.BackendConfig) error {
 	})
 }
 
-func (rt *Runtime) RemoveBackend(url string) error {
+func (rt *Runtime) RemoveBackend(id string) error {
 	return rt.applyUpdate(func() error {
-		return rt.Config.RemoveBackend(url)
+		return rt.Config.RemoveBackend(id)
 	})
 }
 
-func (rt *Runtime) UpdateBackend(url string, weight int32, enabled bool) error {
+func (rt *Runtime) UpdateBackend(id string, url string, weight int32, enabled bool) error {
 	return rt.applyUpdate(func() error {
-		return rt.Config.UpdateBackend(url, weight, enabled)
+		return rt.Config.UpdateBackend(id, url, weight, enabled)
 	})
 }
 
-func (rt *Runtime) GetBackends() []config.BackendResponse {
+func (rt *Runtime) GetBackends() []view.BackendResponse {
 	return rt.State().Backends()
 }
 
-func (rt *Runtime) GetBackend(url string) *config.BackendResponse {
-	return rt.State().Backend(url)
+func (rt *Runtime) GetBackend(id string) *view.BackendResponse {
+	return rt.State().Backend(id)
 }
 
-func (rt *Runtime) UpdateGlobalConfig(proxyPort int32, strategy string) error {
+func (rt *Runtime) UpdateServerConfig(proxyPort, adminGrpcPort int32) error {
 	return rt.applyUpdate(func() error {
-		return rt.Config.UpdateGlobal(int(proxyPort), strategy)
+		return rt.Config.UpdateServer(int(proxyPort), int(adminGrpcPort))
 	})
 }
 
-func (rt *Runtime) GetGlobalConfig() config.GlobalConfigResponse {
+func (rt *Runtime) GetServerConfig() view.ServerConfigResponse {
 	raw := rt.State().Snapshot.Raw
-	return config.GlobalConfigResponse{
-		ProxyPort:  raw.ProxyPort,
-		LBStrategy: raw.LBStrategy,
+	return view.ServerConfigResponse{
+		ProxyPort:     raw.Server.ProxyPort,
+		AdminGrpcPort: raw.Server.AdminGrpcPort,
 	}
 }
 
-func (rt *Runtime) GetVirtualHosts() []config.VirtualHostResponse {
+func (rt *Runtime) UpdateLoadBalancerConfig(strategy string) error {
+	return rt.applyUpdate(func() error {
+		return rt.Config.UpdateLoadBalancer(strategy)
+	})
+}
+
+func (rt *Runtime) GetLoadBalancerConfig() view.LoadBalancerConfigResponse {
+	raw := rt.State().Snapshot.Raw
+	return view.LoadBalancerConfigResponse{
+		Strategy: raw.LoadBalancer.Strategy,
+	}
+}
+
+func (rt *Runtime) GetVirtualHosts() []view.VirtualHostResponse {
 	virtualHosts := rt.State().Snapshot.Raw.VirtualHosts
-	resp := make([]config.VirtualHostResponse, 0, len(virtualHosts))
+	resp := make([]view.VirtualHostResponse, 0, len(virtualHosts))
 	for _, v := range virtualHosts {
-		resp = append(resp, config.VirtualHostResponse{
-			Domain:     v.Domain,
-			Backends:   append([]string(nil), v.Backends...),
-			PathRoutes: append([]config.PathRoute(nil), v.PathRoutes...),
-			Security:   v.Security,
+		resp = append(resp, view.VirtualHostResponse{
+			Domain:           v.Domain,
+			BackendIDs:       append([]string(nil), v.BackendIDs...),
+			PathRoutes:       append([]config.PathRoute(nil), v.PathRoutes...),
+			SecurityPolicyID: v.SecurityPolicyID,
 		})
 	}
 	return resp
@@ -350,7 +366,7 @@ func (rt *Runtime) RemoveVirtualHost(domain string) error {
 	})
 }
 
-func (rt *Runtime) GetSecurityConfigHost(host string) config.SecurityConfigResponse {
+func (rt *Runtime) GetSecurityConfigHost(host string) view.SecurityConfigResponse {
 	if idx := len(host); idx > 0 {
 		for i, c := range host {
 			if c == ':' {
@@ -361,13 +377,19 @@ func (rt *Runtime) GetSecurityConfigHost(host string) config.SecurityConfigRespo
 		_ = idx
 	}
 
-	vhost := rt.State().Snapshot.VHostsByDomain[host]
-	if vhost == nil || vhost.Security == nil {
-		return config.SecurityConfigResponse{}
+	snapshot := rt.State().Snapshot
+	vhost := snapshot.VHostsByDomain[host]
+	if vhost == nil {
+		return view.SecurityConfigResponse{}
 	}
 
-	return config.SecurityConfigResponse{
-		RateLimiting: vhost.Security.RateLimiting,
+	policy := snapshot.PoliciesById[vhost.SecurityPolicyID]
+	if policy == nil {
+		return view.SecurityConfigResponse{}
+	}
+
+	return view.SecurityConfigResponse{
+		RateLimiting: policy.RateLimiting,
 	}
 }
 
@@ -383,9 +405,27 @@ func (rt *Runtime) SetOnRateLimitUpdate(cb func(domain string, cfg config.RateLi
 	rt.onRateLimitUpdate = cb
 }
 
-func (rt *Runtime) UpdateVirtualHostRateLimiting(domain string, rate config.RateLimitingConfig) error {
+func (rt *Runtime) SetVirtualHostSecurityPolicy(domain string, policyID string) error {
 	if err := rt.applyUpdate(func() error {
-		return rt.Config.UpdateVirtualHostRateLimiting(domain, rate)
+		return rt.Config.SetVirtualHostSecurityPolicy(domain, policyID)
+	}); err != nil {
+		return err
+	}
+
+	security := rt.GetSecurityConfigHost(domain)
+	rt.callbackMu.RLock()
+	callback := rt.onRateLimitUpdate
+	rt.callbackMu.RUnlock()
+	if callback != nil {
+		callback(domain, security.RateLimiting)
+	}
+
+	return nil
+}
+
+func (rt *Runtime) UpsertPolicy(policy config.SecurityPolicy) error {
+	if err := rt.applyUpdate(func() error {
+		return rt.Config.UpsertPolicy(policy)
 	}); err != nil {
 		return err
 	}
@@ -394,35 +434,62 @@ func (rt *Runtime) UpdateVirtualHostRateLimiting(domain string, rate config.Rate
 	callback := rt.onRateLimitUpdate
 	rt.callbackMu.RUnlock()
 	if callback != nil {
-		callback(domain, rate)
+		for _, vhost := range rt.State().Snapshot.Raw.VirtualHosts {
+			if vhost.SecurityPolicyID == policy.Id {
+				callback(vhost.Domain, policy.RateLimiting)
+			}
+		}
 	}
 
 	return nil
 }
 
-func (rt *Runtime) GetVirtualHostSecurityConfig(domain string) *config.SecurityConfigResponse {
-	vhost := rt.State().Snapshot.VHostsByDomain[domain]
-	if vhost == nil || vhost.Security == nil {
+func (rt *Runtime) GetPolicies() []view.SecurityPolicyResponse {
+	policies := rt.State().Snapshot.Raw.Security.Policies
+	resp := make([]view.SecurityPolicyResponse, 0, len(policies))
+	for _, policy := range policies {
+		resp = append(resp, view.SecurityPolicyResponse{
+			Id:           policy.Id,
+			RateLimiting: policy.RateLimiting,
+		})
+	}
+	return resp
+}
+
+func (rt *Runtime) GetVirtualHostSecurity(domain string) *view.VirtualHostSecurityResponse {
+	snapshot := rt.State().Snapshot
+	vhost := snapshot.VHostsByDomain[domain]
+	if vhost == nil {
 		return nil
 	}
 
-	resp := config.SecurityConfigResponse{
-		RateLimiting: vhost.Security.RateLimiting,
+	policy := snapshot.PoliciesById[vhost.SecurityPolicyID]
+	if policy == nil {
+		return nil
+	}
+
+	resp := view.VirtualHostSecurityResponse{
+		Domain:           vhost.Domain,
+		SecurityPolicyID: vhost.SecurityPolicyID,
+		Policy: view.SecurityPolicyResponse{
+			Id:           policy.Id,
+			RateLimiting: policy.RateLimiting,
+		},
 	}
 	return &resp
 }
 
-func (rt *Runtime) GetVirtualHost(host string) *config.VirtualHostResponse {
+func (rt *Runtime) GetVirtualHost(host string) *view.VirtualHostResponse {
 	vhost := rt.State().Snapshot.VHostsByDomain[host]
 	if vhost == nil {
 		return nil
 	}
 
-	return &config.VirtualHostResponse{
-		Domain:     vhost.Domain,
-		Backends:   append([]string(nil), vhost.Backends...),
-		PathRoutes: append([]config.PathRoute(nil), vhost.PathRoutes...),
-		Security:   vhost.Security,
+	return &view.VirtualHostResponse{
+		Domain:           vhost.Domain,
+		BackendIDs:       append([]string(nil), vhost.BackendIDs...),
+		PathRoutes:       append([]config.PathRoute(nil), vhost.PathRoutes...),
+		SecurityPolicyID: vhost.SecurityPolicyID,
 	}
 }
 

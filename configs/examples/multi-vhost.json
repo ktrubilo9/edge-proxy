@@ -1,12 +1,17 @@
 {
-  "proxy_port": 8080,
-  "lb_strategy": "least-connections",
+  "server": {
+    "proxy_port": 8080,
+    "admin_grpc_port": 50051
+  },
+  "load_balancing": {
+    "strategy": "least-connections"
+  },
   "backends": [
-    { "url": "env:APP_FRONTEND_1_URL", "weight": 1, "enabled": true },
-    { "url": "env:APP_FRONTEND_2_URL", "weight": 1, "enabled": true },
-    { "url": "env:APP_API_1_URL", "weight": 2, "enabled": true },
-    { "url": "env:APP_API_2_URL", "weight": 2, "enabled": true },
-    { "url": "env:APP_ADMIN_1_URL", "weight": 1, "enabled": true }
+    { "id": "frontend-1", "url": "env:APP_FRONTEND_1_URL", "weight": 1, "enabled": true },
+    { "id": "frontend-2", "url": "env:APP_FRONTEND_2_URL", "weight": 1, "enabled": true },
+    { "id": "api-1", "url": "env:APP_API_1_URL", "weight": 2, "enabled": true },
+    { "id": "api-2", "url": "env:APP_API_2_URL", "weight": 2, "enabled": true },
+    { "id": "admin-1", "url": "env:APP_ADMIN_1_URL", "weight": 1, "enabled": true }
   ],
   "health_check": {
     "path": "/health",
@@ -21,6 +26,37 @@
     "keep_alive_timeout_ms": 30000,
     "idle_conn_timeout_ms": 90000
   },
+  "security": {
+    "policies": [
+      {
+        "id": "public",
+        "rate_limiting": {
+          "enabled": false,
+          "rate_per_ip": 100,
+          "burst": 50,
+          "window_sec": 60
+        }
+      },
+      {
+        "id": "api",
+        "rate_limiting": {
+          "enabled": true,
+          "rate_per_ip": 60,
+          "burst": 20,
+          "window_sec": 60
+        }
+      },
+      {
+        "id": "admin",
+        "rate_limiting": {
+          "enabled": true,
+          "rate_per_ip": 20,
+          "burst": 10,
+          "window_sec": 60
+        }
+      }
+    ]
+  },
   "logging": {
     "enabled": true,
     "level": "info",
@@ -30,39 +66,18 @@
   "virtual_hosts": [
     {
       "domain": "app.example.local",
-      "backends": ["env:APP_FRONTEND_1_URL", "env:APP_FRONTEND_2_URL"],
-      "security": {
-        "rate_limiting": {
-          "enabled": false,
-          "rate_per_ip": 100,
-          "burst": 50,
-          "window_sec": 60
-        }
-      }
+      "backend_ids": ["frontend-1", "frontend-2"],
+      "security_policy_id": "public"
     },
     {
       "domain": "api.example.local",
-      "backends": ["env:APP_API_1_URL", "env:APP_API_2_URL"],
-      "security": {
-        "rate_limiting": {
-          "enabled": true,
-          "rate_per_ip": 60,
-          "burst": 20,
-          "window_sec": 60
-        }
-      }
+      "backend_ids": ["api-1", "api-2"],
+      "security_policy_id": "api"
     },
     {
       "domain": "admin.example.local",
-      "backends": ["env:APP_ADMIN_1_URL"],
-      "security": {
-        "rate_limiting": {
-          "enabled": true,
-          "rate_per_ip": 20,
-          "burst": 10,
-          "window_sec": 60
-        }
-      }
+      "backend_ids": ["admin-1"],
+      "security_policy_id": "admin"
     }
   ]
 }
