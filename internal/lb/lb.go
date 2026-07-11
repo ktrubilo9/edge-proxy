@@ -17,6 +17,8 @@ func GetLoadBalancer(strategy string, m *metrics.Metrics) LoadBalancer {
 	switch strategy {
 	case "least-connections":
 		return NewLeastConnections(m)
+	case "adaptive":
+		return NewAdaptiveLB(m)
 	default:
 		logger.Warn("Unknown load balancing strategy, defaulting to least-connections", map[string]interface{}{
 			"strategy": strategy,
