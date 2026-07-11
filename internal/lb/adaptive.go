@@ -59,6 +59,18 @@ func (alb *AdaptiveLB) Next(backends []*config.BackendConfig) (*config.BackendCo
 
 	scored := alb.scoreBackends(backends)
 	if len(scored) == 0 {
+		hasEnabled := false
+
+		for _, b := range backends {
+			if b.Enabled {
+				hasEnabled = true
+				break
+			}
+		}
+		if !hasEnabled {
+			return nil, ErrNoAvailableBackend
+		}
+		// backends enabled, but no metrics -> fallback random
 		return backends[rand.IntN(len(backends))], nil
 	}
 
