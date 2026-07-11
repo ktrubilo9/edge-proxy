@@ -14,9 +14,9 @@ func NewLeastConnections(metrics *metrics.Metrics) *LeastConnections {
 	return &LeastConnections{metrics: metrics}
 }
 
-func (lc *LeastConnections) Next(backends []*config.BackendConfig) *config.BackendConfig {
+func (lc *LeastConnections) Next(backends []*config.BackendConfig) (*config.BackendConfig, error) {
 	if len(backends) == 0 {
-		return nil
+		return nil, ErrNoAvailableBackend
 	}
 
 	var best *config.BackendConfig
@@ -36,5 +36,6 @@ func (lc *LeastConnections) Next(backends []*config.BackendConfig) *config.Backe
 			best = b
 		}
 	}
-	return best
+
+	return best, nil
 }
