@@ -55,7 +55,7 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 			}
 		}
 
-		logAndReturn := func(statusCode int, errMsg string, backendURL string, fields map[string]interface{}) {
+		logAndReturn := func(statusCode int, responseMsg string, backendURL string, fields map[string]interface{}, err error) {
 			duration := time.Since(start)
 			if fields == nil {
 				fields = make(map[string]interface{})
@@ -65,8 +65,8 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 
 			fields["status_code"] = statusCode
 			fields["backend_url"] = backendURL
-			fields["error_message"] = errMsg
-
+			fields["response_message"] = responseMsg
+			fields["error_message"] = err
 			if statusCode >= 500 {
 				logger.Error("Proxy request failed with 5xx", fields)
 			} else if statusCode >= 400 {
@@ -79,11 +79,11 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 			if statusCode >= 400 {
 				atomic.AddUint64(&state.Metrics.FailedRequests, 1)
 			}
-			http.Error(w, errMsg, statusCode)
+			http.Error(w, responseMsg, statusCode)
 		}
 
 		if vhost == nil || len(targetBackends) == 0 {
-			logAndReturn(http.StatusForbidden, "Unknown host", "", nil)
+			logAndReturn(http.StatusForbidden, "Unknown host", "", nil, nil)
 			return
 		}
 
@@ -99,14 +99,13 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 		}
 
 		if len(backends) == 0 {
-			logAndReturn(http.StatusServiceUnavailable, "No active backends available", "", nil)
+			logAndReturn(http.StatusServiceUnavailable, "No active backends available", "", nil, nil)
 			return
 		}
 
 		backendCandidates := append([]*config.BackendConfig(nil), backends...)
-		backend := current.LoadBalancer.Next(backendCandidates)
-		if backend == nil {
-			logAndReturn(http.StatusServiceUnavailable, "All servers are down", "", nil)
+		if len(backendCandidates) == 0 {
+			logAndReturn(http.StatusServiceUnavailable, "No available backend", "", nil, nil)
 			return
 		}
 
@@ -149,7 +148,7 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 			if backend != nil {
 				state.Metrics.RecordRequestEnd(backend.URL, float64(duration.Nanoseconds())/1e6, true, int32(statusCode))
 			}
-			logAndReturn(http.StatusBadGateway, "Backend error", "", fields)
+			logAndReturn(http.StatusBadGateway, "Backend error", "", fields, nil)
 			return
 		}
 		defer resp.Body.Close()
@@ -227,7 +226,8 @@ func executeProxyRequest(
 	var lastBackend *config.BackendConfig
 
 	for attempt := 0; len(candidates) > 0; attempt++ {
-		backend := current.LoadBalancer.Next(candidates)
+		// todo log err
+		backend, err := current.LoadBalancer.Next(candidates)
 		if backend == nil {
 			break
 		}
