@@ -4,54 +4,39 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Project status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)](#project-status)
 
-Edge Proxy is an experimental, runtime-configurable edge security gateway written
-in Go. It combines reverse proxy routing, atomic configuration updates, backend
-health tracking, rate limiting, and Prometheus observability in a compact
-codebase intended for research, learning, and open-source collaboration.
+Edge Proxy is an experimental, runtime-configurable reverse proxy and edge
+gateway written in Go. It routes HTTP traffic by host and path, tracks backend
+health, applies per-virtual-host rate limiting, exposes Prometheus metrics, and
+accepts authenticated runtime configuration updates.
 
-The long-term direction is a security-focused gateway with explainable adaptive
-load balancing.
+The project is currently pre-alpha. It is useful for local experiments,
+education, benchmarking, and architecture work, but it has not completed a
+security audit and should not be treated as a production security boundary.
 
-## Why Edge Proxy?
+## What Edge Proxy Does Today
 
-The project focuses on two areas that are useful to explore together:
+At runtime, Edge Proxy:
 
-- runtime security policies that can be updated without restarting the proxy;
-- adaptive traffic distribution driven by measured backend behavior.
+- accepts HTTP requests on the public proxy port;
+- selects a virtual host by the request `Host` header;
+- selects optional path routes using longest-match precedence;
+- can strip a matched path prefix before forwarding upstream;
+- forwards only to enabled backends that are currently marked active;
+- supports `least-connections` and experimental `adaptive` load balancing;
+- retries retryable requests once on an alternate backend;
+- runs active backend health checks and exposes backend status;
+- resolves client IPs using forwarding headers only from trusted proxy CIDRs;
+- applies per-virtual-host rate limiting through reusable security policies;
+- publishes validated configuration snapshots atomically;
+- persists runtime configuration changes to the configured JSON file;
+- exposes a token-protected admin HTTP API backed by token-protected gRPC;
+- exports operational metrics for Prometheus;
+- includes a Docker Compose stack with two mock backends, Prometheus, and
+  Grafana.
 
-The current runtime publishes validated configuration snapshots atomically.
-Requests either use the previous complete state or the next complete state,
-without observing a partially applied update.
-
-## Current Features
-
-- Host-based and path-based reverse proxy routing.
-- Optional path-prefix stripping.
-- Least-connections and experimental adaptive load balancing.
-- Active backend health checks and runtime backend status tracking.
-- Authenticated HTTP admin API backed by an authenticated gRPC control plane.
-- Atomic runtime configuration updates.
-- Per-virtual-host rate limiting.
-- Trusted-proxy-aware client IP resolution.
-- Request IDs and forwarded request metadata.
-- One retry on an alternate backend for retryable requests.
-- Prometheus metrics and a provisioned Grafana dashboard.
-- Docker Compose development environment with two mock backends.
-
-## Planned Direction
-
-The next development milestones focus on:
-
-1. hardening adaptive load balancing based on latency EWMA, error rate, active
-   connections, backend health, and recovery behavior;
-2. per-virtual-host IP allowlists and denylists;
-3. configurable request size, URL, and header limits;
-4. structured security decision logs;
-5. JWT/OIDC authentication and authorization;
-6. Coraza and OWASP Core Rule Set integration;
-7. configuration schema versioning, JSON validation, and optional YAML support.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for ways to participate.
+Requests always use one complete runtime snapshot. During a configuration
+update, a request either sees the previous valid snapshot or the next valid
+snapshot; it does not observe a partially applied update.
 
 ## Architecture
 
@@ -245,55 +230,22 @@ audit and should not be presented as a production-ready security boundary.
 
 The project originated from an engineering thesis. The current repository is a
 substantial refactor with a consolidated Go module, immutable configuration
-snapshots, atomic runtime publication, a backend state registry, and a hardened
-control plane. Historical adaptive load-balancing experiments will be
-reproduced against this architecture.
+snapshots, atomic runtime publication, a backend state registry, and an
+authenticated control plane.
 
-## Improvement Backlog
+## Current Limitations
 
-1. Preserve `env:` placeholders during config saves, or explicitly separate
-   resolved runtime config from persisted source config.
-2. Preserve file permissions and add fsync-style durability around atomic
-   config writes.
-3. Define whether server port updates are next-start-only or implement safe
-   listener restarts.
-4. Run an initial health-check pass during startup to reduce temporary 503s.
-5. Trigger a health check immediately after adding or enabling a backend.
-6. Return 4xx responses for admin validation failures instead of mapping all
-   failed mutations to 500.
-7. Add admin handler tests for validation errors, malformed JSON, and gRPC
-   failures.
-8. Add TLS or mTLS support for the admin gRPC control plane.
-9. Add proxy-level request body, URL length, and header size limits.
-10. Start and test stale host cleanup for per-host rate limiters.
-11. Normalize host matching for case-insensitive domain names.
-12. Validate duplicate or overlapping path routes and document precedence.
-13. Add config schema versioning and migration tests.
-14. Add OpenAPI documentation for the admin HTTP API.
-15. Add protobuf regeneration instructions and a repeatable generation script.
-16. Add Docker Compose smoke tests for proxy, admin API, Prometheus, and
-    Grafana.
-17. Add load and latency benchmarks for load balancers and middleware.
-18. Review Prometheus labels so runtime metrics prefer stable backend IDs over
-    potentially sensitive URLs where practical.
-19. Expand structured logging tests and add redaction tests for secrets and
-    request bodies.
-20. Add a deployment hardening guide covering networks, tokens, CORS, metrics,
-    and trusted proxy CIDRs.
-
-## Feature Ideas
-
-1. JWT/OIDC authentication and authorization policies per virtual host.
-2. Per-virtual-host IP allowlists and denylists.
-3. Coraza and OWASP Core Rule Set WAF integration.
-4. Circuit breakers with outlier detection and automatic backend quarantine.
-5. Canary, weighted, and header-based traffic splitting.
-6. Request and response header/body transformation rules.
-7. TLS termination with certificate hot reload and optional ACME automation.
-8. Admin web UI for runtime configuration, health, and metrics inspection.
-9. Structured audit logs and security decision logs.
-10. Configuration import/export with JSON Schema validation and optional YAML
-    support.
+- Admin gRPC authentication uses bearer tokens, but the transport is plaintext.
+  Keep it on a trusted private network.
+- Runtime configuration saves currently persist resolved `env:` values instead
+  of preserving the original placeholders.
+- Updating `server.proxy_port` or `server.admin_grpc_port` persists the new
+  value, but running listeners are not restarted.
+- Newly added or freshly started backends may return 503 until health checks
+  mark them active.
+- The adaptive load balancer is implemented but still experimental.
+- Request size, URL length, and header limits are not yet configurable per
+  virtual host.
 
 ## Contributing and Security
 
