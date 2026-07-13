@@ -27,7 +27,7 @@ without observing a partially applied update.
 
 - Host-based and path-based reverse proxy routing.
 - Optional path-prefix stripping.
-- Least-connections load balancing.
+- Least-connections and experimental adaptive load balancing.
 - Active backend health checks and runtime backend status tracking.
 - Authenticated HTTP admin API backed by an authenticated gRPC control plane.
 - Atomic runtime configuration updates.
@@ -42,7 +42,7 @@ without observing a partially applied update.
 
 The next development milestones focus on:
 
-1. adaptive load balancing based on latency EWMA, error rate, active
+1. hardening adaptive load balancing based on latency EWMA, error rate, active
    connections, backend health, and recovery behavior;
 2. per-virtual-host IP allowlists and denylists;
 3. configurable request size, URL, and header limits;
@@ -144,7 +144,7 @@ Important fields:
 | --- | --- |
 | `server.proxy_port` | Public proxy HTTP port |
 | `server.admin_grpc_port` | Internal admin gRPC port |
-| `load_balancing.strategy` | Load-balancing strategy; currently `least-connections` |
+| `load_balancing.strategy` | Load-balancing strategy: `least-connections` or experimental `adaptive` |
 | `backends` | Upstream backend definitions with stable `id` values |
 | `virtual_hosts` | Host-based routing policies using `backend_ids` |
 | `path_routes` | Optional path-specific backend selection |
@@ -156,6 +156,19 @@ Important fields:
 Runtime changes made through the admin API are persisted to the configured JSON
 file. Mount that file as a volume when configuration must survive container
 replacement.
+
+Path routes are matched as exact paths or slash-delimited subtrees. For example,
+`/api` matches `/api` and `/api/users`, but not `/apix`. When multiple routes
+match, the longest route wins. `strip_prefix` is applied only after a route has
+matched.
+
+Two operational caveats are worth keeping in mind while the project is
+pre-alpha:
+
+- `env:` placeholders are resolved when the runtime loads configuration.
+  Runtime updates currently persist resolved values back to the JSON file.
+- Updating `server.proxy_port` or `server.admin_grpc_port` changes persisted
+  configuration, but live listeners are not restarted yet.
 
 ## Admin API
 
@@ -235,6 +248,52 @@ substantial refactor with a consolidated Go module, immutable configuration
 snapshots, atomic runtime publication, a backend state registry, and a hardened
 control plane. Historical adaptive load-balancing experiments will be
 reproduced against this architecture.
+
+## Improvement Backlog
+
+1. Preserve `env:` placeholders during config saves, or explicitly separate
+   resolved runtime config from persisted source config.
+2. Preserve file permissions and add fsync-style durability around atomic
+   config writes.
+3. Define whether server port updates are next-start-only or implement safe
+   listener restarts.
+4. Run an initial health-check pass during startup to reduce temporary 503s.
+5. Trigger a health check immediately after adding or enabling a backend.
+6. Return 4xx responses for admin validation failures instead of mapping all
+   failed mutations to 500.
+7. Add admin handler tests for validation errors, malformed JSON, and gRPC
+   failures.
+8. Add TLS or mTLS support for the admin gRPC control plane.
+9. Add proxy-level request body, URL length, and header size limits.
+10. Start and test stale host cleanup for per-host rate limiters.
+11. Normalize host matching for case-insensitive domain names.
+12. Validate duplicate or overlapping path routes and document precedence.
+13. Add config schema versioning and migration tests.
+14. Add OpenAPI documentation for the admin HTTP API.
+15. Add protobuf regeneration instructions and a repeatable generation script.
+16. Add Docker Compose smoke tests for proxy, admin API, Prometheus, and
+    Grafana.
+17. Add load and latency benchmarks for load balancers and middleware.
+18. Review Prometheus labels so runtime metrics prefer stable backend IDs over
+    potentially sensitive URLs where practical.
+19. Expand structured logging tests and add redaction tests for secrets and
+    request bodies.
+20. Add a deployment hardening guide covering networks, tokens, CORS, metrics,
+    and trusted proxy CIDRs.
+
+## Feature Ideas
+
+1. JWT/OIDC authentication and authorization policies per virtual host.
+2. Per-virtual-host IP allowlists and denylists.
+3. Coraza and OWASP Core Rule Set WAF integration.
+4. Circuit breakers with outlier detection and automatic backend quarantine.
+5. Canary, weighted, and header-based traffic splitting.
+6. Request and response header/body transformation rules.
+7. TLS termination with certificate hot reload and optional ACME automation.
+8. Admin web UI for runtime configuration, health, and metrics inspection.
+9. Structured audit logs and security decision logs.
+10. Configuration import/export with JSON Schema validation and optional YAML
+    support.
 
 ## Contributing and Security
 

@@ -43,7 +43,7 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 				// Prefer the longest matching route so specific prefixes beat broader catch-all routes.
 				for j := range vh.PathRoutes {
 					pr := &vh.PathRoutes[j]
-					if strings.HasPrefix(r.URL.Path, pr.Path) && len(pr.Path) > longestPathMatch {
+					if pathRouteMatches(r.URL.Path, pr.Path) && len(pr.Path) > longestPathMatch {
 						pathRoute = pr
 						longestPathMatch = len(pr.Path)
 						if len(pr.BackendIDs) > 0 {
@@ -190,6 +190,13 @@ func stripRoutePrefix(requestPath string, routePrefix string) string {
 		return "/" + stripped
 	}
 	return stripped
+}
+
+func pathRouteMatches(requestPath string, routePath string) bool {
+	if routePath == "/" {
+		return strings.HasPrefix(requestPath, "/")
+	}
+	return requestPath == routePath || strings.HasPrefix(requestPath, routePath+"/")
 }
 
 func ensureRequestID(w http.ResponseWriter, r *http.Request) string {

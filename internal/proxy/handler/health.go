@@ -49,7 +49,7 @@ func HealthHandler(rt *runtime.Runtime) http.HandlerFunc {
 				currentConnections = int32(bm.ActiveConnections)
 			}
 			lastHealthCheck := int64(0)
-			if status, ok := current.BackendStatus(b.URL); ok {
+			if status, ok := current.BackendStatus(b.Id); ok {
 				lastHealthCheck = status.LastHealthCheck.Load()
 			}
 

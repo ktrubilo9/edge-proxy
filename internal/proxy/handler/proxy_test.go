@@ -191,6 +191,72 @@ func TestProxyHandlerUsesPathRouteBackends(t *testing.T) {
 	}
 }
 
+func TestProxyHandlerPathRouteRequiresBoundaryMatch(t *testing.T) {
+	defaultBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("default-backend"))
+	}))
+	defer defaultBackend.Close()
+
+	apiBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("api-backend"))
+	}))
+	defer apiBackend.Close()
+
+	fullConfig := &config.FullConfig{
+		Server: config.ServerConfig{
+			ProxyPort:     8080,
+			AdminGrpcPort: 50051,
+		},
+		LoadBalancer: config.LoadBalancingConfig{
+			Strategy: "least-connections",
+		},
+		Backends: []*config.BackendConfig{
+			{Id: "default", URL: defaultBackend.URL, Weight: 1, Enabled: true},
+			{Id: "api", URL: apiBackend.URL, Weight: 1, Enabled: true},
+		},
+		HealthCheck: config.HealthCheckConfig{
+			Path:             "/health",
+			IntervalSeconds:  1,
+			TimeoutSeconds:   1,
+			HealthyThreshold: 1,
+			SuccessCodes:     []int32{200},
+		},
+		Timeouts: config.TimeoutsConfig{
+			ConnectTimeoutMs:   1000,
+			ResponseTimeoutMs:  1000,
+			KeepAliveTimeoutMs: 1000,
+			IdleConnTimeoutMs:  1000,
+		},
+		VirtualHosts: []config.VirtualHost{
+			{
+				Domain:           "app.local",
+				BackendIDs:       []string{"default"},
+				SecurityPolicyID: "default",
+				PathRoutes: []config.PathRoute{
+					{Path: "/api", BackendIDs: []string{"api"}},
+				},
+			},
+		},
+	}
+
+	rt := newTestRuntime(t, fullConfig)
+
+	req := httptest.NewRequest(http.MethodGet, "http://app.local/apix", nil)
+	req.Host = "app.local"
+	rec := httptest.NewRecorder()
+
+	ProxyHandler(rt).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	body, _ := io.ReadAll(rec.Body)
+	if strings.TrimSpace(string(body)) != "default-backend" {
+		t.Fatalf("body = %q, want %q", string(body), "default-backend")
+	}
+}
+
 func TestProxyHandlerStripsPathPrefixBeforeForwarding(t *testing.T) {
 	var gotPath string
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -92,6 +92,7 @@ func (v DefaultValidator) Validate(cfg *FullConfig) error {
 
 	allowedStrategies := map[string]struct{}{
 		"least-connections": {},
+		"adaptive":          {},
 	}
 
 	if _, ok := allowedStrategies[cfg.LoadBalancer.Strategy]; !ok {
@@ -180,6 +181,9 @@ func (v DefaultValidator) Validate(cfg *FullConfig) error {
 			}
 			if !strings.HasPrefix(route.Path, "/") {
 				return fmt.Errorf("path route %s on virtual host %s must start with /", route.Path, vhost.Domain)
+			}
+			if len(route.BackendIDs) == 0 && len(vhost.BackendIDs) == 0 {
+				return fmt.Errorf("path route %s on virtual host %s must define backend_ids when the virtual host has no default backends", route.Path, vhost.Domain)
 			}
 
 			for _, backendID := range route.BackendIDs {
