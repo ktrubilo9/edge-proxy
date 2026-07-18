@@ -1,0 +1,883 @@
+openapi: 3.1.0
+info:
+  title: Edge Proxy Admin API
+  version: 0.1.0
+  description: |
+    The authenticated HTTP control plane for Edge Proxy runtime configuration.
+
+    The HTTP service forwards each request to the internal gRPC control plane.
+    Successful mutations are persisted and published atomically. Authentication
+    is enabled by default and uses the `ADMIN_API_TOKEN` bearer token.
+
+    This document describes the behavior registered in `cmd/admin-api/main.go`.
+    The project is pre-alpha; do not expose the admin listener to an untrusted
+    network or use real credentials in examples.
+  license:
+    name: MIT
+    identifier: MIT
+  contact:
+    name: Edge Proxy project
+    url: https://github.com/ktrubilo9/edge-proxy
+externalDocs:
+  description: Edge Proxy repository
+  url: https://github.com/ktrubilo9/edge-proxy
+servers:
+  - url: http://localhost:8081
+    description: Default local admin listener
+security:
+  - bearerAuth: []
+tags:
+  - name: Backends
+    description: Manage upstream backend definitions and inspect health state.
+  - name: Virtual hosts
+    description: Manage host-based routing and path routing.
+  - name: Security policies
+    description: Manage reusable rate-limiting policies and host assignments.
+  - name: Runtime configuration
+    description: Inspect and update server and load-balancer settings.
+paths:
+  /api/backend:
+    get:
+      tags: [Backends]
+      operationId: listBackends
+      summary: List backends
+      description: |
+        Returns all configured backends with their current runtime health state.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/backends.go#L11-L25).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/backends.go#L11-L25
+      responses:
+        "200":
+          description: Configured backends.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Backend"
+              example:
+                - id: backend-1
+                  url: http://backend1:8080
+                  weight: 1
+                  enabled: true
+                  active: true
+                  error_count: 0
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [Backends]
+      operationId: createBackend
+      summary: Add a backend
+      description: |
+        Adds a uniquely identified HTTP or HTTPS backend and atomically publishes the new configuration.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/backends.go#L48-L72).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/backends.go#L48-L72
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BackendCreate"
+            example:
+              id: backend-3
+              url: http://backend3:8080
+              weight: 1
+              enabled: true
+      responses:
+        "200":
+          $ref: "#/components/responses/MutationSucceeded"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/backend/{id}:
+    parameters:
+      - $ref: "#/components/parameters/BackendId"
+    get:
+      tags: [Backends]
+      operationId: getBackend
+      summary: Get a backend
+      description: |
+        Returns the selected backend and its current runtime health state.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/backends.go#L26-L47).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/backends.go#L26-L47
+      responses:
+        "200":
+          description: Current backend configuration and health state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Backend"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [Backends]
+      operationId: updateBackend
+      summary: Update a backend
+      description: |
+        Replaces the mutable backend fields. The path `id` is authoritative;
+        any `id` property in the JSON body is ignored. An omitted URL keeps the
+        existing URL. Weight must be positive. Omitting `enabled` decodes it as
+        `false` and therefore disables the backend.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/backends.go#L73-L104).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/backends.go#L73-L104
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BackendUpdate"
+            example:
+              url: http://backend1:8080
+              weight: 2
+              enabled: true
+      responses:
+        "200":
+          $ref: "#/components/responses/MutationSucceeded"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [Backends]
+      operationId: deleteBackend
+      summary: Delete a backend
+      description: |
+        Removes the backend and its references from virtual hosts and path routes, provided the resulting configuration remains valid.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/backends.go#L105-L129).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/backends.go#L105-L129
+      responses:
+        "200":
+          $ref: "#/components/responses/MutationSucceeded"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/vhost:
+    get:
+      tags: [Virtual hosts]
+      operationId: listVirtualHosts
+      summary: List virtual hosts
+      description: |
+        Returns every configured host routing definition.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L11-L26).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L11-L26
+      responses:
+        "200":
+          description: Configured virtual hosts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VirtualHostRead"
+              example:
+                - domain: app.example.local
+                  backend_ids: [backend-1, backend-2]
+                  security_policy_id: default
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [Virtual hosts]
+      operationId: createVirtualHost
+      summary: Add a virtual host
+      description: |
+        Adds a host routing definition. If `security_policy_id` is omitted, the service uses `default`.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L49-L73).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L49-L73
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VirtualHostCreateRequest"
+            example:
+              virtual_host:
+                domain: api.example.local
+                backend_ids: [backend-1]
+                security_policy_id: default
+      responses:
+        "200":
+          $ref: "#/components/responses/MutationSucceeded"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/vhost/{domain}:
+    parameters:
+      - $ref: "#/components/parameters/Domain"
+    get:
+      tags: [Virtual hosts]
+      operationId: getVirtualHost
+      summary: Get a virtual host
+      description: |
+        Returns the routing definition selected by the path domain.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L27-L48).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L27-L48
+      responses:
+        "200":
+          description: Virtual-host routing definition.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VirtualHostRead"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [Virtual hosts]
+      operationId: updateVirtualHost
+      summary: Replace a virtual host
+      description: |
+        Replaces the virtual-host definition selected by the path. The path
+        `domain` is authoritative. If the body omits `security_policy_id`, the
+        existing assignment is preserved.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L74-L105).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L74-L105
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VirtualHostUpdateRequest"
+            example:
+              virtual_host:
+                backend_ids: [backend-1, backend-2]
+                path_routes:
+                  - path: /api
+                    backend_ids: [backend-2]
+                    strip_prefix: true
+      responses:
+        "200":
+          $ref: "#/components/responses/MutationSucceeded"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [Virtual hosts]
+      operationId: deleteVirtualHost
+      summary: Delete a virtual host
+      description: |
+        Deletes the routing definition selected by the path domain.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L106-L131).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L106-L131
+      responses:
+        "200":
+          $ref: "#/components/responses/MutationSucceeded"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/vhost/{domain}/security:
+    parameters:
+      - $ref: "#/components/parameters/Domain"
+    get:
+      tags: [Security policies]
+      operationId: getVirtualHostSecurity
+      summary: Get a virtual host's security policy
+      description: |
+        Returns the security policy assigned to the selected virtual host.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L132-L153).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L132-L153
+      responses:
+        "200":
+          description: The virtual host and its resolved policy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VirtualHostSecurity"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [Security policies]
+      operationId: setVirtualHostSecurity
+      summary: Assign a security policy to a virtual host
+      description: |
+        The path `domain` is authoritative. The referenced policy must exist.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L154-L185).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L154-L185
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecurityPolicyAssignment"
+            example:
+              policy_id: strict
+      responses:
+        "200":
+          $ref: "#/components/responses/MutationSucceeded"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/security/policies:
+    get:
+      tags: [Security policies]
+      operationId: listSecurityPolicies
+      summary: List security policies
+      description: |
+        Returns every reusable security policy.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L186-L200).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L186-L200
+      responses:
+        "200":
+          description: Configured reusable security policies.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SecurityPolicy"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/security/policies/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PolicyId"
+    put:
+      tags: [Security policies]
+      operationId: upsertSecurityPolicy
+      summary: Create or replace a security policy
+      description: |
+        The path `id` is authoritative and replaces any `id` supplied in the body.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L201-L227).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/virtual_hosts.go#L201-L227
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecurityPolicyWrite"
+            example:
+              rate_limiting:
+                enabled: true
+                rate_per_ip: 100
+                burst: 50
+                window_sec: 60
+      responses:
+        "200":
+          $ref: "#/components/responses/MutationSucceeded"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/config/server:
+    get:
+      tags: [Runtime configuration]
+      operationId: getServerConfig
+      summary: Get listener configuration
+      description: |
+        Returns persisted listener ports. Updating these values does not restart live listeners yet.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/config.go#L11-L46).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/config.go#L11-L46
+      responses:
+        "200":
+          description: Current persisted server configuration.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerConfig"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [Runtime configuration]
+      operationId: updateServerConfig
+      summary: Update persisted listener configuration
+      description: |
+        A missing or zero-valued port keeps its current value. Live listeners are not restarted.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/config.go#L11-L46).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/config.go#L11-L46
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerConfigUpdate"
+            example:
+              proxy_port: 8080
+              admin_grpc_port: 50051
+      responses:
+        "200":
+          $ref: "#/components/responses/MutationSucceeded"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/config/lb:
+    get:
+      tags: [Runtime configuration]
+      operationId: getLoadBalancerConfig
+      summary: Get the load-balancing strategy
+      description: |
+        Returns the persisted load-balancing strategy.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/config.go#L47-L80).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/config.go#L47-L80
+      responses:
+        "200":
+          description: Current load-balancer configuration.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoadBalancerConfig"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [Runtime configuration]
+      operationId: updateLoadBalancerConfig
+      summary: Update the load-balancing strategy
+      description: |
+        Validates and persists the selected load-balancing strategy.
+
+        Source: [Go handler](https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/config.go#L47-L80).
+      externalDocs:
+        description: Go handler implementation
+        url: https://github.com/ktrubilo9/edge-proxy/blob/839a8375f87966daa6fb21ee84dda76ee7af6ba9/internal/admin/handler/config.go#L47-L80
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoadBalancerConfig"
+            example:
+              strategy: least-connections
+      responses:
+        "200":
+          $ref: "#/components/responses/MutationSucceeded"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Value of `ADMIN_API_TOKEN`; authentication is enabled by default.
+  parameters:
+    BackendId:
+      name: id
+      in: path
+      required: true
+      description: Stable backend identifier.
+      schema:
+        type: string
+        minLength: 1
+      example: backend-1
+    Domain:
+      name: domain
+      in: path
+      required: true
+      description: Virtual-host domain. URL-encode special characters when placing it in the path.
+      schema:
+        type: string
+        minLength: 1
+      example: app.example.local
+    PolicyId:
+      name: id
+      in: path
+      required: true
+      description: Stable security-policy identifier.
+      schema:
+        type: string
+        minLength: 1
+      example: default
+  responses:
+    MutationSucceeded:
+      description: The change was validated, persisted, and published.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BasicResponse"
+          example:
+            success: true
+            message: Configuration updated successfully
+    BadRequest:
+      description: The request body is not valid JSON or a required path value is missing.
+      content:
+        text/plain:
+          schema:
+            type: string
+          example: "Invalid request body: unexpected EOF\n"
+    Unauthorized:
+      description: Bearer authentication is enabled and the token is missing or invalid.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          example: Bearer realm="admin-api"
+      content:
+        text/plain:
+          schema:
+            type: string
+          example: "Unauthorized\n"
+    PayloadTooLarge:
+      description: The request body exceeds the service-wide 1 MiB limit.
+      content:
+        text/plain:
+          schema:
+            type: string
+    InternalError:
+      description: The gRPC control plane rejected the operation or the configuration could not be persisted.
+      content:
+        text/plain:
+          schema:
+            type: string
+          example: "Failed to update backend: backend does not exist in config: backend-1\n"
+  schemas:
+    BasicResponse:
+      type: object
+      additionalProperties: false
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+      example:
+        success: true
+        message: Backend updated successfully
+    Backend:
+      type: object
+      additionalProperties: false
+      required: [id, url, weight]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        url:
+          type: string
+          format: uri
+        weight:
+          type: integer
+          format: int32
+          minimum: 1
+        enabled:
+          type: boolean
+        active:
+          type: boolean
+        error_count:
+          type: integer
+          format: int32
+          minimum: 0
+        last_error:
+          type: string
+    BackendCreate:
+      type: object
+      additionalProperties: false
+      required: [id, url, weight]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        url:
+          type: string
+          format: uri
+          pattern: "^https?://"
+        weight:
+          type: integer
+          format: int32
+          minimum: 1
+        enabled:
+          type: boolean
+          default: false
+    BackendUpdate:
+      type: object
+      additionalProperties: false
+      required: [weight]
+      properties:
+        id:
+          type: string
+          description: Accepted by the decoder but replaced with the path `id`.
+        url:
+          type: string
+          format: uri
+          pattern: "^https?://"
+          description: Omit or send an empty string to preserve the existing URL.
+        weight:
+          type: integer
+          format: int32
+          minimum: 1
+        enabled:
+          type: boolean
+          default: false
+          description: Omission decodes as false and disables the backend.
+    PathRoute:
+      type: object
+      additionalProperties: false
+      required: [path]
+      properties:
+        path:
+          type: string
+          minLength: 1
+          pattern: "^/"
+          example: /api
+        backend_ids:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        strip_prefix:
+          type: boolean
+          default: false
+    VirtualHost:
+      type: object
+      additionalProperties: false
+      properties:
+        domain:
+          type: string
+          minLength: 1
+        backend_ids:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        path_routes:
+          type: array
+          items:
+            $ref: "#/components/schemas/PathRoute"
+        security_policy_id:
+          type: string
+          minLength: 1
+          default: default
+      description: At least one default backend or one path route is required. Every referenced backend and policy must already exist.
+    VirtualHostRead:
+      allOf:
+        - $ref: "#/components/schemas/VirtualHost"
+        - type: object
+          required: [domain, security_policy_id]
+    VirtualHostCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [virtual_host]
+      properties:
+        virtual_host:
+          allOf:
+            - $ref: "#/components/schemas/VirtualHost"
+            - type: object
+              required: [domain]
+    VirtualHostUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [virtual_host]
+      properties:
+        domain:
+          type: string
+          description: Accepted by the decoder but replaced with the path `domain`.
+        virtual_host:
+          $ref: "#/components/schemas/VirtualHost"
+    RateLimitingConfig:
+      type: object
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+          default: false
+        rate_per_ip:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Must be positive when rate limiting is enabled.
+        burst:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Must be positive when rate limiting is enabled.
+        window_sec:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Must be positive when rate limiting is enabled.
+      allOf:
+        - if:
+            required: [enabled]
+            properties:
+              enabled:
+                const: true
+          then:
+            required: [rate_per_ip, burst, window_sec]
+            properties:
+              rate_per_ip:
+                minimum: 1
+              burst:
+                minimum: 1
+              window_sec:
+                minimum: 1
+    SecurityPolicy:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        rate_limiting:
+          $ref: "#/components/schemas/RateLimitingConfig"
+    SecurityPolicyWrite:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          description: Accepted by the decoder but replaced with the path `id`.
+        rate_limiting:
+          $ref: "#/components/schemas/RateLimitingConfig"
+    SecurityPolicyAssignment:
+      type: object
+      additionalProperties: false
+      required: [policy_id]
+      properties:
+        domain:
+          type: string
+          description: Accepted by the decoder but replaced with the path `domain`.
+        policy_id:
+          type: string
+          minLength: 1
+    VirtualHostSecurity:
+      type: object
+      additionalProperties: false
+      required: [domain, security_policy_id, policy]
+      properties:
+        domain:
+          type: string
+        security_policy_id:
+          type: string
+        policy:
+          $ref: "#/components/schemas/SecurityPolicy"
+    ServerConfig:
+      type: object
+      additionalProperties: false
+      required: [proxy_port, admin_grpc_port]
+      properties:
+        proxy_port:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 65535
+        admin_grpc_port:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 65535
+    ServerConfigUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        proxy_port:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 65535
+          description: Zero or omission preserves the current value.
+        admin_grpc_port:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 65535
+          description: Zero or omission preserves the current value.
+    LoadBalancerConfig:
+      type: object
+      additionalProperties: false
+      required: [strategy]
+      properties:
+        strategy:
+          type: string
+          enum: [least-connections, adaptive]

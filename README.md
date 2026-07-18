@@ -183,6 +183,15 @@ GET|PUT              /api/config/server
 GET|PUT              /api/config/lb
 ```
 
+API documentation:
+
+- [OpenAPI 3.1 specification](docs/openapi.yaml)
+- [Admin API guide](docs/api-reference.md)
+- [Browsable API reference](https://ktrubilo9.github.io/edge-proxy/api/)
+
+The browsable reference is generated from the checked-in specification and
+published through this repository's GitHub Pages workflow.
+
 Example:
 
 ```bash

@@ -1,0 +1,16 @@
+{
+  "name": "edge-proxy-api-docs",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.18.0"
+  },
+  "scripts": {
+    "docs:dev": "sourcey dev",
+    "docs:validate": "sourcey validate ./docs/openapi.yaml",
+    "docs:build": "sourcey build -o dist"
+  },
+  "devDependencies": {
+    "sourcey": "3.6.5"
+  }
+}
