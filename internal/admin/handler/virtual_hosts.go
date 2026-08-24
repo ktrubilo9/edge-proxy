@@ -64,7 +64,8 @@ func HandleVhostAdd(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 			return
 		}
 		if !resp.Success {
-			http.Error(w, "Failed to add virtual host: "+resp.Error, http.StatusInternalServerError)
+			status := clientErrorStatus(resp.Error)
+			http.Error(w, "Failed to add virtual host: "+resp.Error, status)
 			return
 		}
 		respondJSON(w, resp)
@@ -96,7 +97,8 @@ func HandleVhostUpdate(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 			return
 		}
 		if !resp.Success {
-			http.Error(w, "Failed to update virtual host: "+resp.Error, http.StatusInternalServerError)
+			status := clientErrorStatus(resp.Error)
+			http.Error(w, "Failed to update virtual host: "+resp.Error, status)
 			return
 		}
 		respondJSON(w, resp)
@@ -122,7 +124,8 @@ func HandleVhostDelete(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 			return
 		}
 		if !resp.Success {
-			http.Error(w, "Failed to remove virtual host: "+resp.Error, http.StatusInternalServerError)
+			status := clientErrorStatus(resp.Error)
+			http.Error(w, "Failed to remove virtual host: "+resp.Error, status)
 			return
 		}
 		respondJSON(w, resp)
@@ -176,7 +179,8 @@ func HandleSecurityConfigUpdate(proxyClient adminpb.ProxyAdminClient) http.Handl
 			return
 		}
 		if !resp.Success {
-			http.Error(w, "Failed to update security config: "+resp.Error, http.StatusInternalServerError)
+			status := clientErrorStatus(resp.Error)
+			http.Error(w, "Failed to update security config: "+resp.Error, status)
 			return
 		}
 		respondJSON(w, resp)
@@ -219,7 +223,8 @@ func HandlePolicyUpsert(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 			return
 		}
 		if !resp.Success {
-			http.Error(w, "Failed to upsert policy: "+resp.Error, http.StatusInternalServerError)
+			status := clientErrorStatus(resp.Error)
+			http.Error(w, "Failed to upsert policy: "+resp.Error, status)
 			return
 		}
 		respondJSON(w, resp)

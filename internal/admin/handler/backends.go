@@ -63,7 +63,8 @@ func HandleBackendAdd(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 			return
 		}
 		if !resp.Success {
-			http.Error(w, "Failed to add backend: "+resp.Error, http.StatusInternalServerError)
+			status := clientErrorStatus(resp.Error)
+			http.Error(w, "Failed to add backend: "+resp.Error, status)
 			return
 		}
 		respondJSON(w, resp)
@@ -95,7 +96,8 @@ func HandleBackendUpdate(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc 
 			return
 		}
 		if !resp.Success {
-			http.Error(w, "Failed to update backend: "+resp.Error, http.StatusInternalServerError)
+			status := clientErrorStatus(resp.Error)
+			http.Error(w, "Failed to update backend: "+resp.Error, status)
 			return
 		}
 		respondJSON(w, resp)
@@ -121,7 +123,8 @@ func HandleBackendDelete(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc 
 			return
 		}
 		if !resp.Success {
-			http.Error(w, "Failed to remove backend: "+resp.Error, http.StatusInternalServerError)
+			status := clientErrorStatus(resp.Error)
+			http.Error(w, "Failed to remove backend: "+resp.Error, status)
 			return
 		}
 		respondJSON(w, resp)
