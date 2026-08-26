@@ -32,8 +32,9 @@ type Runtime struct {
 	state     atomic.Pointer[RuntimeState]
 	StartTime time.Time
 
-	callbackMu        sync.RWMutex
-	onRateLimitUpdate func(domain string, cfg config.RateLimitingConfig)
+	callbackMu                   sync.RWMutex
+	onRateLimitUpdate            func(domain string, cfg config.RateLimitingConfig)
+	onBackendHealthCheckRequired func(backend config.BackendConfig)
 }
 
 type BackendStatus struct {
@@ -288,9 +289,17 @@ func (rt *Runtime) State() *RuntimeState {
 }
 
 func (rt *Runtime) AddBackend(backend config.BackendConfig) error {
-	return rt.applyUpdate(func() error {
+	if err := rt.applyUpdate(func() error {
 		return rt.Config.AddBackend(backend)
-	})
+	}); err != nil {
+		return err
+	}
+
+	if backend.Enabled {
+		rt.triggerBackendHealthCheck(backend)
+	}
+
+	return nil
 }
 
 func (rt *Runtime) RemoveBackend(id string) error {
@@ -300,9 +309,35 @@ func (rt *Runtime) RemoveBackend(id string) error {
 }
 
 func (rt *Runtime) UpdateBackend(id string, url string, weight int32, enabled bool) error {
-	return rt.applyUpdate(func() error {
+	previous := rt.Config.GetBackend(id)
+
+	if err := rt.applyUpdate(func() error {
 		return rt.Config.UpdateBackend(id, url, weight, enabled)
-	})
+	}); err != nil {
+		return err
+	}
+
+	backend := rt.Config.GetBackend(id)
+	if backend == nil {
+		return nil
+	}
+
+	shouldRecheck := backend.Enabled && (previous == nil ||
+		!previous.Enabled ||
+		previous.URL != backend.URL)
+
+	if shouldRecheck {
+		status, ok := rt.State().BackendStatus(id)
+		if ok {
+			status.Active.Store(false)
+			status.ErrorCount.Store(0)
+			status.SetLastError("")
+		}
+
+		rt.triggerBackendHealthCheck(*backend)
+	}
+
+	return nil
 }
 
 func (rt *Runtime) GetBackends() []view.BackendResponse {
@@ -403,6 +438,22 @@ func (rt *Runtime) SetOnRateLimitUpdate(cb func(domain string, cfg config.RateLi
 	rt.callbackMu.Lock()
 	defer rt.callbackMu.Unlock()
 	rt.onRateLimitUpdate = cb
+}
+
+func (rt *Runtime) SetOnBackendHealthCheckRequired(cb func(backend config.BackendConfig)) {
+	rt.callbackMu.Lock()
+	defer rt.callbackMu.Unlock()
+	rt.onBackendHealthCheckRequired = cb
+}
+
+func (rt *Runtime) triggerBackendHealthCheck(backend config.BackendConfig) {
+	rt.callbackMu.RLock()
+	cb := rt.onBackendHealthCheckRequired
+	rt.callbackMu.RUnlock()
+
+	if cb != nil {
+		cb(backend)
+	}
 }
 
 func (rt *Runtime) SetVirtualHostSecurityPolicy(domain string, policyID string) error {

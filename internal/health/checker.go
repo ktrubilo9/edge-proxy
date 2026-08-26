@@ -71,6 +71,10 @@ func (hc *HealthChecker) checkBackends() {
 }
 
 func (hc *HealthChecker) CheckBackend(b *config.BackendConfig) {
+	if b == nil || !b.Enabled {
+		return
+	}
+
 	current := hc.state.State()
 	hc.checkBackend(current, b)
 }

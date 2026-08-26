@@ -56,6 +56,19 @@ func (s *Service) Replace(cfg *FullConfig) error {
 	return s.applyLocked(cfg)
 }
 
+func (s *Service) GetBackend(id string) *BackendConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, b := range s.current.Backends {
+		if b != nil && b.Id == id {
+			cp := *b
+			return &cp
+		}
+	}
+	return nil
+}
+
 func (s *Service) AddBackend(backend BackendConfig) error {
 	if backend.Id == "" {
 		return errors.New("backend id cannot be empty")
