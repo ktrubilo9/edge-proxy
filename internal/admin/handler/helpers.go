@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 )
 
 func logRequest(r *http.Request) {
@@ -17,7 +18,6 @@ func respondJSON(w http.ResponseWriter, data interface{}) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
-
 
 // clientErrorStatus maps validation-ish admin failures to 4xx.
 func clientErrorStatus(msg string) int {
