@@ -85,6 +85,9 @@ func NewProxy(configPath string) *Proxy {
 			int(cfg.WindowSec),
 		)
 	})
+	proxy.Runtime.SetOnBackendHealthCheckRequired(func(backend config.BackendConfig) {
+		go proxy.HealthChecker.CheckBackend(&backend)
+	})
 	return proxy
 }
 
