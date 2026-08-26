@@ -34,7 +34,8 @@ func HandleServerConfig(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 				return
 			}
 			if !resp.Success {
-				http.Error(w, "Failed to set server config: "+resp.Error, http.StatusInternalServerError)
+				status := clientErrorStatus(resp.Error)
+				http.Error(w, "Failed to set server config: "+resp.Error, status)
 				return
 			}
 			respondJSON(w, resp)
@@ -70,7 +71,8 @@ func HandleLoadBalancerConfig(proxyClient adminpb.ProxyAdminClient) http.Handler
 				return
 			}
 			if !resp.Success {
-				http.Error(w, "Failed to set load balancer config: "+resp.Error, http.StatusInternalServerError)
+				status := clientErrorStatus(resp.Error)
+				http.Error(w, "Failed to set load balancer config: "+resp.Error, status)
 				return
 			}
 			respondJSON(w, resp)
