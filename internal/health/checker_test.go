@@ -27,13 +27,6 @@ func newHealthTestChecker(t *testing.T, threshold int32) (*HealthChecker, *confi
 			Strategy: "least-connections",
 		},
 		Backends: []*config.BackendConfig{backend},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: threshold,
-			SuccessCodes:     []int32{200},
-		},
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   1000,
 			ResponseTimeoutMs:  1000,

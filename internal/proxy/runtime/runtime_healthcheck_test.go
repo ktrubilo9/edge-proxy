@@ -13,6 +13,7 @@ import (
 	"edge-proxy/internal/config"
 	"edge-proxy/internal/health"
 	runtimepkg "edge-proxy/internal/proxy/runtime"
+	"edge-proxy/internal/testutil"
 )
 
 func TestAddEnabledBackendTriggersImmediateHealthCheckAndActivatesHealthyBackend(t *testing.T) {
@@ -169,13 +170,8 @@ func TestEnableDisabledBackendTriggersImmediateHealthCheckAndKeepsUnhealthyBacke
 }
 
 func newHealthCheckerWithCallback(rt *runtimepkg.Runtime) *health.HealthChecker {
-	hc := health.NewHealthChecker(rt, &config.HealthCheckConfig{
-		Path:             "/health",
-		IntervalSeconds:  60,
-		TimeoutSeconds:   1,
-		HealthyThreshold: 1,
-		SuccessCodes:     []int32{http.StatusOK},
-	})
+	healthConfig := testutil.DefaultHealthCheckConfigWithInterval(60000)
+	hc := health.NewHealthChecker(rt, &healthConfig)
 
 	rt.SetOnBackendHealthCheckRequired(func(backend config.BackendConfig) {
 		go hc.CheckBackend(&backend)
@@ -187,6 +183,7 @@ func newHealthCheckerWithCallback(rt *runtimepkg.Runtime) *health.HealthChecker 
 func newHealthCheckTestRuntime(t *testing.T, healthyThreshold int32) *runtimepkg.Runtime {
 	t.Helper()
 
+	healthConfig := testutil.DefaultHealthCheckConfigWithInterval(60000)
 	cfg := config.FullConfig{
 		Server: config.ServerConfig{
 			ProxyPort:     8080,
@@ -209,13 +206,7 @@ func newHealthCheckTestRuntime(t *testing.T, healthyThreshold int32) *runtimepkg
 				Enabled: true,
 			},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  60,
-			TimeoutSeconds:   1,
-			HealthyThreshold: healthyThreshold,
-			SuccessCodes:     []int32{http.StatusOK},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   1000,
 			ResponseTimeoutMs:  2000,
