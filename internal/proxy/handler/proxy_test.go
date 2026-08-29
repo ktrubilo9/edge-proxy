@@ -3,6 +3,7 @@ package handler
 import (
 	"edge-proxy/internal/config"
 	"edge-proxy/internal/proxy/runtime"
+	"edge-proxy/internal/testutil"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -49,7 +50,7 @@ func newTestRuntime(t *testing.T, fullConfig *config.FullConfig) *runtime.Runtim
 
 func newSingleRouteTestRuntime(t *testing.T, host string, backendURL string, route *config.PathRoute) *runtime.Runtime {
 	t.Helper()
-
+	healthConfig := testutil.DefaultHealthCheckConfig()
 	fullConfig := &config.FullConfig{
 		Server: config.ServerConfig{
 			ProxyPort:     8080,
@@ -61,13 +62,7 @@ func newSingleRouteTestRuntime(t *testing.T, host string, backendURL string, rou
 		Backends: []*config.BackendConfig{
 			{Id: "backend", URL: backendURL, Weight: 1, Enabled: true},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 1,
-			SuccessCodes:     []int32{200},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   1000,
 			ResponseTimeoutMs:  1000,
@@ -202,6 +197,7 @@ func TestProxyHandlerPathRouteRequiresBoundaryMatch(t *testing.T) {
 	}))
 	defer apiBackend.Close()
 
+	healthConfig := testutil.DefaultHealthCheckConfig()
 	fullConfig := &config.FullConfig{
 		Server: config.ServerConfig{
 			ProxyPort:     8080,
@@ -214,13 +210,7 @@ func TestProxyHandlerPathRouteRequiresBoundaryMatch(t *testing.T) {
 			{Id: "default", URL: defaultBackend.URL, Weight: 1, Enabled: true},
 			{Id: "api", URL: apiBackend.URL, Weight: 1, Enabled: true},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 1,
-			SuccessCodes:     []int32{200},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   1000,
 			ResponseTimeoutMs:  1000,
@@ -300,6 +290,7 @@ func TestProxyHandlerPrefersLongestMatchingPathRoute(t *testing.T) {
 	}))
 	defer v1Backend.Close()
 
+	healthConfig := testutil.DefaultHealthCheckConfig()
 	fullConfig := &config.FullConfig{
 		Server: config.ServerConfig{
 			ProxyPort:     8080,
@@ -312,13 +303,7 @@ func TestProxyHandlerPrefersLongestMatchingPathRoute(t *testing.T) {
 			{Id: "api", URL: apiBackend.URL, Weight: 1, Enabled: true},
 			{Id: "api-v1", URL: v1Backend.URL, Weight: 1, Enabled: true},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 1,
-			SuccessCodes:     []int32{200},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   1000,
 			ResponseTimeoutMs:  1000,
@@ -392,6 +377,7 @@ func TestProxyHandlerRetriesIdempotentRequestOnAlternateBackend(t *testing.T) {
 	}))
 	defer healthyBackend.Close()
 
+	healthConfig := testutil.DefaultHealthCheckConfig()
 	fullConfig := &config.FullConfig{
 		Server: config.ServerConfig{
 			ProxyPort:     8080,
@@ -404,13 +390,7 @@ func TestProxyHandlerRetriesIdempotentRequestOnAlternateBackend(t *testing.T) {
 			{Id: "dead", URL: "http://127.0.0.1:1", Weight: 1, Enabled: true},
 			{Id: "healthy", URL: healthyBackend.URL, Weight: 1, Enabled: true},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 1,
-			SuccessCodes:     []int32{200},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   200,
 			ResponseTimeoutMs:  1000,

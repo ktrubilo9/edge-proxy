@@ -6,6 +6,15 @@ import (
 	"strings"
 )
 
+const (
+	maxHealthWorkers = 1024
+
+	minHealthIntervalMs = 100
+	maxHealthIntervalMs = 3600000
+
+	maxHealthTimeoutMs = 60000
+)
+
 type Validator interface {
 	Validate(cfg *FullConfig) error
 }
@@ -99,25 +108,8 @@ func (v DefaultValidator) Validate(cfg *FullConfig) error {
 		return fmt.Errorf("invalid load balancer strategy: %s", cfg.LoadBalancer.Strategy)
 	}
 
-	if cfg.HealthCheck.Path == "" {
-		return fmt.Errorf("health check path cannot be empty")
-	}
-	if cfg.HealthCheck.IntervalSeconds <= 0 {
-		return fmt.Errorf("health check interval must be positive")
-	}
-	if cfg.HealthCheck.TimeoutSeconds <= 0 {
-		return fmt.Errorf("health check timeout must be positive")
-	}
-	if cfg.HealthCheck.HealthyThreshold <= 0 {
-		return fmt.Errorf("healthy threshold must be positive")
-	}
-	if len(cfg.HealthCheck.SuccessCodes) == 0 {
-		return fmt.Errorf("health check success codes cannot be empty")
-	}
-	for _, code := range cfg.HealthCheck.SuccessCodes {
-		if code < 100 || code > 599 {
-			return fmt.Errorf("invalid health check success code: %d", code)
-		}
+	if err := validateHealthCheckConfig(cfg.HealthCheck); err != nil {
+		return err
 	}
 
 	if cfg.Timeouts.ConnectTimeoutMs <= 0 ||
@@ -192,6 +184,118 @@ func (v DefaultValidator) Validate(cfg *FullConfig) error {
 				}
 			}
 		}
+	}
+
+	return nil
+}
+
+func validateHealthCheckConfig(cfg HealthCheckConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+
+	if cfg.Probe.Type == "" {
+		return fmt.Errorf("health probe type cannot be empty")
+	}
+
+	if !strings.EqualFold(cfg.Probe.Type, "http") {
+		return fmt.Errorf("unsupported health probe type: %s", cfg.Probe.Type)
+	}
+
+	if cfg.Probe.Path == "" {
+		return fmt.Errorf("health probe path cannot be empty")
+	}
+
+	if !strings.HasPrefix(cfg.Probe.Path, "/") {
+		return fmt.Errorf("health probe path must start with /")
+	}
+
+	if cfg.Probe.Method == "" {
+		return fmt.Errorf("health probe method cannot be empty")
+	}
+
+	if cfg.Probe.TimeoutMs <= 0 {
+		return fmt.Errorf("health probe timeout must be positive")
+	}
+
+	if cfg.Probe.TimeoutMs > maxHealthTimeoutMs {
+		return fmt.Errorf("health probe timeout cannot exceed %dms", maxHealthTimeoutMs)
+	}
+
+	if cfg.Schedule.IntervalMs < minHealthIntervalMs {
+		return fmt.Errorf("health check interval cannot be less than %dms", minHealthIntervalMs)
+	}
+
+	if cfg.Schedule.IntervalMs > maxHealthIntervalMs {
+		return fmt.Errorf("health check interval cannot exceed %dms", maxHealthIntervalMs)
+	}
+
+	if cfg.Schedule.JitterMs < 0 {
+		return fmt.Errorf("health check jitter cannot be negative")
+	}
+
+	if cfg.Schedule.JitterMs >= cfg.Schedule.IntervalMs {
+		return fmt.Errorf("health check jitter must be smaller than interval")
+	}
+
+	if cfg.Concurrency.Workers < 1 {
+		return fmt.Errorf("health check workers must be positive")
+	}
+
+	if cfg.Concurrency.Workers > maxHealthWorkers {
+		return fmt.Errorf("health check workers cannot exceed %d", maxHealthWorkers)
+	}
+
+	if cfg.Concurrency.QueueSize < cfg.Concurrency.Workers {
+		return fmt.Errorf("health check queue size must be >= workers")
+	}
+
+	if cfg.Thresholds.Healthy < 1 {
+		return fmt.Errorf("healthy threshold must be positive")
+	}
+
+	if cfg.Thresholds.Unhealthy < 1 {
+		return fmt.Errorf("unhealthy threshold must be positive")
+	}
+
+	if len(cfg.Probe.SuccessCodes) == 0 {
+		return fmt.Errorf("health probe success codes cannot be empty")
+	}
+
+	for _, code := range cfg.Probe.SuccessCodes {
+		if code < 100 || code > 599 {
+			return fmt.Errorf("invalid health probe success code: %d", code)
+		}
+	}
+
+	if cfg.Recovery.Backoff.Enabled {
+		if cfg.Recovery.Backoff.InitialMs <= 0 {
+			return fmt.Errorf("backoff initial duration must be positive")
+		}
+
+		if cfg.Recovery.Backoff.MaxMs < cfg.Recovery.Backoff.InitialMs {
+			return fmt.Errorf("backoff max duration must be >= initial duration")
+		}
+
+		if cfg.Recovery.Backoff.Multiplier < 1 {
+			return fmt.Errorf("backoff multiplier must be >= 1")
+		}
+	}
+
+	if cfg.Transport.MaxIdleConns < 1 {
+		return fmt.Errorf("max idle connections must be positive")
+	}
+
+	if cfg.Transport.MaxIdleConnsPerHost < 1 {
+		return fmt.Errorf("max idle connections per host must be positive")
+	}
+
+	if cfg.Transport.MaxConnsPerHost < 1 {
+		return fmt.Errorf("max connections per host must be positive")
+	}
+
+	if cfg.Transport.KeepAliveMs <= 0 {
+		return fmt.Errorf("keep alive duration must be positive")
 	}
 
 	return nil

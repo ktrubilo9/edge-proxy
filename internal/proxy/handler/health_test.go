@@ -3,6 +3,7 @@ package handler
 import (
 	"edge-proxy/internal/config"
 	healthview "edge-proxy/internal/health"
+	"edge-proxy/internal/testutil"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,8 @@ import (
 )
 
 func TestPublicHealthHandlerDoesNotExposeBackendDetails(t *testing.T) {
+	healthConfig := testutil.DefaultHealthCheckConfig()
+
 	backendURL := "http://backend.internal:3000"
 	rt := newTestRuntime(t, &config.FullConfig{
 		Server: config.ServerConfig{
@@ -23,13 +26,7 @@ func TestPublicHealthHandlerDoesNotExposeBackendDetails(t *testing.T) {
 		Backends: []*config.BackendConfig{
 			{Id: "backend", URL: backendURL, Weight: 1, Enabled: true},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 1,
-			SuccessCodes:     []int32{200},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   1000,
 			ResponseTimeoutMs:  1000,
@@ -55,6 +52,7 @@ func TestPublicHealthHandlerDoesNotExposeBackendDetails(t *testing.T) {
 }
 
 func TestPublicHealthHandlerReportsUnavailable(t *testing.T) {
+	healthConfig := testutil.DefaultHealthCheckConfig()
 	backendURL := "http://backend.internal:3000"
 	rt := newTestRuntime(t, &config.FullConfig{
 		Server: config.ServerConfig{
@@ -67,13 +65,7 @@ func TestPublicHealthHandlerReportsUnavailable(t *testing.T) {
 		Backends: []*config.BackendConfig{
 			{Id: "backend", URL: backendURL, Weight: 1, Enabled: true},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 1,
-			SuccessCodes:     []int32{200},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   1000,
 			ResponseTimeoutMs:  1000,
@@ -99,6 +91,7 @@ func TestPublicHealthHandlerReportsUnavailable(t *testing.T) {
 }
 
 func TestHealthHandlerReportsLastHealthCheckByBackendID(t *testing.T) {
+	healthConfig := testutil.DefaultHealthCheckConfig()
 	backendURL := "http://backend.internal:3000"
 	rt := newTestRuntime(t, &config.FullConfig{
 		Server: config.ServerConfig{
@@ -111,13 +104,7 @@ func TestHealthHandlerReportsLastHealthCheckByBackendID(t *testing.T) {
 		Backends: []*config.BackendConfig{
 			{Id: "backend", URL: backendURL, Weight: 1, Enabled: true},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 1,
-			SuccessCodes:     []int32{200},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   1000,
 			ResponseTimeoutMs:  1000,

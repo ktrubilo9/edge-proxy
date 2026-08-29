@@ -31,18 +31,19 @@ func NewHealthChecker(state *runtime.Runtime, config *config.HealthCheckConfig) 
 func (hc *HealthChecker) Start(metrics *metrics.Metrics) {
 	healthConfig := hc.state.SnapshotView().Raw.HealthCheck
 	logger.Info("Health checker started", map[string]interface{}{
-		"interval_sec":      healthConfig.IntervalSeconds,
-		"timeout_sec":       healthConfig.TimeoutSeconds,
-		"healthy_threshold": healthConfig.HealthyThreshold,
-		"path":              healthConfig.Path,
+		"interval_ms":         healthConfig.Schedule.IntervalMs,
+		"timeout_ms":          healthConfig.Probe.TimeoutMs,
+		"healthy_threshold":   healthConfig.Thresholds.Healthy,
+		"unhealthy_threshold": healthConfig.Thresholds.Unhealthy,
+		"path":                healthConfig.Probe.Path,
 	})
 
 	go func() {
 		for {
-			intervalSeconds := hc.state.SnapshotView().Raw.HealthCheck.IntervalSeconds
+			intervalMs := hc.state.SnapshotView().Raw.HealthCheck.Schedule.IntervalMs
 
 			select {
-			case <-time.After(time.Duration(intervalSeconds) * time.Second):
+			case <-time.After(time.Duration(intervalMs) * time.Millisecond):
 				hc.checkBackends()
 			case <-hc.stopChan:
 				logger.Info("Health checker stopped", nil)
@@ -129,9 +130,9 @@ func (hc *HealthChecker) performHealthCheck(
 	status *runtime.BackendStatus,
 	healthConfig config.HealthCheckConfig,
 ) bool {
-	url := b.URL + healthConfig.Path
+	url := b.URL + healthConfig.Probe.Path
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(healthConfig.TimeoutSeconds)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(healthConfig.Probe.TimeoutMs)*time.Millisecond)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -161,7 +162,7 @@ func (hc *HealthChecker) performHealthCheck(
 	}
 	defer resp.Body.Close()
 
-	if !isSuccessCode(healthConfig, int32(resp.StatusCode)) {
+	if !isSuccessCode(healthConfig.Probe.SuccessCodes, int32(resp.StatusCode)) {
 		recordError(status, fmt.Sprintf("Unsuccessful status code: %d", resp.StatusCode))
 		metrics.RecordHealthCheck(b.URL, false)
 		logger.Warn("Health check returned non-success status", map[string]interface{}{
@@ -179,12 +180,13 @@ func (hc *HealthChecker) performHealthCheck(
 	return true
 }
 
-func isSuccessCode(healthConfig config.HealthCheckConfig, statusCode int32) bool {
-	for _, code := range healthConfig.SuccessCodes {
+func isSuccessCode(successCodes []int32, statusCode int32) bool {
+	for _, code := range successCodes {
 		if statusCode == code {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -212,7 +214,7 @@ func updateBackendStatus(
 	if healthy {
 		status.Active.Store(true)
 	} else {
-		if int32(currentErrorCount) >= healthConfig.HealthyThreshold {
+		if int32(currentErrorCount) >= healthConfig.Thresholds.Unhealthy {
 			status.Active.Store(false)
 		}
 	}

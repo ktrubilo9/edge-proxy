@@ -27,14 +27,6 @@ type BackendConfig struct {
 	Enabled bool   `json:"enabled,omitempty"`
 }
 
-type HealthCheckConfig struct {
-	Path             string  `json:"path"`
-	IntervalSeconds  int32   `json:"interval_seconds"`
-	TimeoutSeconds   int32   `json:"timeout_seconds"`
-	HealthyThreshold int32   `json:"healthy_threshold"`
-	SuccessCodes     []int32 `json:"success_codes"`
-}
-
 type TimeoutsConfig struct {
 	ConnectTimeoutMs   int32 `json:"connect_timeout_ms"`
 	ResponseTimeoutMs  int32 `json:"response_timeout_ms"`
@@ -76,4 +68,60 @@ type LoggingConfig struct {
 	Level      string `json:"level"`
 	Async      bool   `json:"async"`
 	BufferSize int64  `json:"buffer_size"` // for async
+}
+
+type HealthCheckConfig struct {
+	Enabled     bool                    `json:"enabled"`
+	Probe       HealthProbeConfig       `json:"probe"`
+	Schedule    HealthScheduleConfig    `json:"schedule"`
+	Concurrency HealthConcurrencyConfig `json:"concurrency"`
+	Thresholds  HealthThresholdConfig   `json:"thresholds"`
+	Recovery    HealthRecoveryConfig    `json:"recovery"`
+	Transport   HealthTransportConfig   `json:"transport"`
+	Passive     PassiveHealthConfig     `json:"passive"`
+}
+
+type HealthProbeConfig struct {
+	Type         string  `json:"type"`
+	Path         string  `json:"path"`
+	Method       string  `json:"method"`
+	TimeoutMs    int64   `json:"timeout_ms"`
+	SuccessCodes []int32 `json:"success_codes"`
+}
+
+type HealthScheduleConfig struct {
+	IntervalMs int64 `json:"interval_ms"`
+	JitterMs   int64 `json:"jitter_ms"`
+}
+
+type HealthConcurrencyConfig struct {
+	Workers   int `json:"workers"`
+	QueueSize int `json:"queue_size"`
+}
+
+type HealthThresholdConfig struct {
+	Healthy   int32 `json:"healthy"`
+	Unhealthy int32 `json:"unhealthy"`
+}
+
+type HealthRecoveryConfig struct {
+	Backoff HealthBackoffConfig `json:"backoff"`
+}
+
+type HealthBackoffConfig struct {
+	Enabled    bool    `json:"enabled"`
+	InitialMs  int64   `json:"initial_ms"`
+	MaxMs      int64   `json:"max_ms"`
+	Multiplier float64 `json:"multiplier"`
+}
+
+type HealthTransportConfig struct {
+	MaxIdleConns        int   `json:"max_idle_conns"`
+	MaxIdleConnsPerHost int   `json:"max_idle_conns_per_host"`
+	MaxConnsPerHost     int   `json:"max_conns_per_host"`
+	KeepAliveMs         int64 `json:"keep_alive_ms"`
+}
+
+type PassiveHealthConfig struct {
+	Enabled bool `json:"enabled"`
 }

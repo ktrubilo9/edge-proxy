@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"edge-proxy/internal/config"
+	"edge-proxy/internal/testutil"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -202,6 +203,7 @@ func TestPolicyUpdateDoesNotRequireCallback(t *testing.T) {
 func newRuntimeUpdateTestInstance(t *testing.T) *Runtime {
 	t.Helper()
 
+	healthConfig := testutil.DefaultHealthCheckConfig()
 	cfg := config.FullConfig{
 		Server: config.ServerConfig{
 			ProxyPort:     8080,
@@ -213,14 +215,8 @@ func newRuntimeUpdateTestInstance(t *testing.T) *Runtime {
 		Backends: []*config.BackendConfig{
 			{Id: "backend-1", URL: "http://backend-1", Weight: 1, Enabled: true},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 1,
-			SuccessCodes:     []int32{200},
-		},
-		Timeouts: defaultRuntimeTestTimeouts(),
+		HealthCheck: healthConfig,
+		Timeouts:    defaultRuntimeTestTimeouts(),
 		VirtualHosts: []config.VirtualHost{
 			{
 				Domain:           "app.local",

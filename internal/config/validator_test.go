@@ -18,13 +18,6 @@ func validTestConfig() *FullConfig {
 			{Id: "backend-1", URL: "http://backend-1", Weight: 1, Enabled: true},
 			{Id: "backend-2", URL: "http://backend-2", Weight: 1, Enabled: true},
 		},
-		HealthCheck: HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 2,
-			SuccessCodes:     []int32{200},
-		},
 		Timeouts: TimeoutsConfig{
 			ConnectTimeoutMs:   1000,
 			ResponseTimeoutMs:  1000,
