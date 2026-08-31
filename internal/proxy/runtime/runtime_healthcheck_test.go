@@ -43,10 +43,10 @@ func TestAddEnabledBackendTriggersImmediateHealthCheckAndActivatesHealthyBackend
 	}
 
 	waitFor(t, time.Second, func() bool {
-		return checks.Load() >= 1 && status.Active.Load()
+		return checks.Load() >= 1 && status.IsActive()
 	})
 
-	if !status.Active.Load() {
+	if !status.IsActive() {
 		t.Fatal("healthy backend was not activated after the immediate health check")
 	}
 }
@@ -81,7 +81,7 @@ func TestAddEnabledBackendTriggersImmediateHealthCheckAndKeepsUnhealthyBackendIn
 		return checks.Load() >= 1
 	})
 
-	if status.Active.Load() {
+	if status.IsActive() {
 		t.Fatal("unhealthy backend became active after the immediate health check")
 	}
 }
@@ -108,10 +108,10 @@ func TestEnableDisabledBackendTriggersImmediateHealthCheckAndActivatesHealthyBac
 	}
 
 	waitFor(t, time.Second, func() bool {
-		return checks.Load() >= 1 && status.Active.Load()
+		return checks.Load() >= 1 && status.IsActive()
 	})
 
-	if !status.Active.Load() {
+	if !status.IsActive() {
 		t.Fatal("healthy backend was not activated after enable")
 	}
 }
@@ -146,7 +146,7 @@ func TestEnableDisabledBackendTriggersImmediateHealthCheckAndKeepsUnhealthyBacke
 	}
 
 	waitFor(t, time.Second, func() bool {
-		return checks.Load() >= 1 && status.Active.Load()
+		return checks.Load() >= 1 && status.IsActive()
 	})
 
 	if err := rt.UpdateBackend("backend-1", backendServer.URL, 1, false); err != nil {
@@ -164,7 +164,7 @@ func TestEnableDisabledBackendTriggersImmediateHealthCheckAndKeepsUnhealthyBacke
 		return checks.Load() > previousChecks
 	})
 
-	if status.Active.Load() {
+	if status.IsActive() {
 		t.Fatal("unhealthy backend remained active after re-enable and immediate health check")
 	}
 }

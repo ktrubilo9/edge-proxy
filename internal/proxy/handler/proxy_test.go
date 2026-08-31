@@ -5,6 +5,7 @@ import (
 	"edge-proxy/internal/proxy/runtime"
 	"edge-proxy/internal/testutil"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"sync/atomic"
 )
@@ -42,7 +44,7 @@ func newTestRuntime(t *testing.T, fullConfig *config.FullConfig) *runtime.Runtim
 		if !ok {
 			t.Fatalf("missing backend status for %s", backend.URL)
 		}
-		status.Active.Store(true)
+		status.ApplyProbeResult(true, nil, config.HealthThresholdConfig{Healthy: 1, Unhealthy: 1}, time.Now())
 	}
 
 	return rt
@@ -99,7 +101,7 @@ func TestProxyHandlerUnknownHostReturnsForbidden(t *testing.T) {
 	if !ok {
 		t.Fatal("missing backend status")
 	}
-	status.Active.Store(false)
+	status.ApplyProbeResult(false, errors.New("forced inactive for test"), config.HealthThresholdConfig{Healthy: 1, Unhealthy: 1}, time.Now())
 
 	req := httptest.NewRequest(http.MethodGet, "http://unknown.local/", nil)
 	req.Host = "unknown.local"

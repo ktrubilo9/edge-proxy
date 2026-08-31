@@ -50,7 +50,9 @@ func HealthHandler(rt *runtime.Runtime) http.HandlerFunc {
 			}
 			lastHealthCheck := int64(0)
 			if status, ok := current.BackendStatus(b.Id); ok {
-				lastHealthCheck = status.LastHealthCheck.Load()
+				if snap := status.Snapshot(); !snap.LastHealthCheck.IsZero() {
+					lastHealthCheck = snap.LastHealthCheck.Unix()
+				}
 			}
 
 			backendStatuses = append(backendStatuses, health.BackendStatus{
@@ -99,6 +101,7 @@ func HealthHandler(rt *runtime.Runtime) http.HandlerFunc {
 func activeBackendCount(rt *runtime.Runtime) int {
 	activeCount := 0
 	for _, backend := range rt.GetBackendsResponse() {
+
 		if backend.Enabled && backend.Active {
 			activeCount++
 		}

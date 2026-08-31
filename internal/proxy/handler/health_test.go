@@ -5,10 +5,12 @@ import (
 	healthview "edge-proxy/internal/health"
 	"edge-proxy/internal/testutil"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPublicHealthHandlerDoesNotExposeBackendDetails(t *testing.T) {
@@ -78,7 +80,7 @@ func TestPublicHealthHandlerReportsUnavailable(t *testing.T) {
 	if !ok {
 		t.Fatal("missing backend status")
 	}
-	status.Active.Store(false)
+	status.ApplyProbeResult(false, errors.New("forced unavailable for test"), config.HealthThresholdConfig{Healthy: 1, Unhealthy: 1}, time.Now())
 
 	req := httptest.NewRequest(http.MethodGet, "http://app.local/health", nil)
 	rec := httptest.NewRecorder()
@@ -118,7 +120,7 @@ func TestHealthHandlerReportsLastHealthCheckByBackendID(t *testing.T) {
 	if !ok {
 		t.Fatal("missing backend status")
 	}
-	status.LastHealthCheck.Store(lastHealthCheck)
+	status.ApplyProbeResult(true, nil, config.HealthThresholdConfig{Healthy: 1, Unhealthy: 1}, time.Unix(lastHealthCheck, 0))
 
 	req := httptest.NewRequest(http.MethodGet, "http://app.local/health", nil)
 	rec := httptest.NewRecorder()

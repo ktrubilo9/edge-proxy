@@ -37,24 +37,106 @@ type Runtime struct {
 	onBackendHealthCheckRequired func(backend config.BackendConfig)
 }
 
+type HealthState uint8
+
+const (
+	HealthUnknown = iota
+	HealthHealthy
+	HealthUnhealthy
+)
+
 type BackendStatus struct {
-	Active          atomic.Bool
-	ErrorCount      atomic.Uint32
-	mu              sync.RWMutex
-	LastError       string
-	LastHealthCheck atomic.Int64
+	healthState HealthState
+
+	consecutiveFailures uint32
+	consecutiveSuccess  uint32
+
+	lastError       string
+	lastHealthCheck time.Time
+	lastStateChange time.Time
+
+	mu sync.RWMutex
 }
 
-func (bs *BackendStatus) SetLastError(err string) {
-	bs.mu.Lock()
-	defer bs.mu.Unlock()
-	bs.LastError = err
+type BackendStatusSnapshot struct {
+	HealthState          HealthState
+	ConsecutiveFailures  uint32
+	ConsecutiveSuccesses uint32
+	LastError            string
+	LastHealthCheck      time.Time
+	LastStateChange      time.Time
 }
 
-func (bs *BackendStatus) GetLastError() string {
-	bs.mu.RLock()
-	defer bs.mu.RUnlock()
-	return bs.LastError
+func (s *BackendStatus) Snapshot() BackendStatusSnapshot {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return BackendStatusSnapshot{
+		HealthState:          s.healthState,
+		ConsecutiveFailures:  s.consecutiveFailures,
+		ConsecutiveSuccesses: s.consecutiveSuccess,
+		LastError:            s.lastError,
+		LastHealthCheck:      s.lastHealthCheck,
+		LastStateChange:      s.lastStateChange,
+	}
+}
+
+func (s *BackendStatus) IsActive() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.healthState == HealthHealthy
+}
+
+func (s *BackendStatus) GetLastError() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastError
+}
+
+func (s *BackendStatus) ApplyProbeResult(
+	healthy bool,
+	probeErr error,
+	htc config.HealthThresholdConfig,
+	now time.Time,
+) (changed bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	previous := s.healthState
+	s.lastHealthCheck = now
+
+	if healthy {
+		s.consecutiveFailures = 0
+		s.consecutiveSuccess++
+		s.lastError = ""
+		if s.consecutiveSuccess >= uint32(htc.Healthy) {
+			s.healthState = HealthHealthy
+		}
+	} else {
+		s.consecutiveSuccess = 0
+		s.consecutiveFailures++
+		if probeErr != nil {
+			s.lastError = probeErr.Error()
+		}
+		if s.consecutiveFailures >= uint32(htc.Unhealthy) {
+			s.healthState = HealthUnhealthy
+		}
+	}
+	if previous != s.healthState {
+		s.lastStateChange = now
+		return true
+	}
+	return false
+}
+
+func (s *BackendStatus) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.healthState = HealthUnknown
+	s.consecutiveFailures = 0
+	s.consecutiveSuccess = 0
+	s.lastError = ""
 }
 
 func NewRuntime(configPath string) (*Runtime, error) {
@@ -106,15 +188,18 @@ func (state *RuntimeState) Backends() []view.BackendResponse {
 			continue
 		}
 
+		// to update
 		item := view.BackendResponse{
 			Id:      backend.Id,
 			URL:     backend.URL,
 			Weight:  backend.Weight,
 			Enabled: backend.Enabled,
 		}
+
 		if status, ok := state.BackendStatus(backend.Id); ok {
-			item.Active = status.Active.Load()
-			item.ErrorCount = status.ErrorCount.Load()
+			snap := status.Snapshot()
+			item.Active = status.IsActive()
+			item.ErrorCount = snap.ConsecutiveFailures
 			item.LastError = status.GetLastError()
 		}
 
@@ -134,6 +219,7 @@ func (state *RuntimeState) Backend(id string) *view.BackendResponse {
 		return nil
 	}
 
+	// to update
 	resp := &view.BackendResponse{
 		Id:      backend.Id,
 		URL:     backend.URL,
@@ -141,8 +227,9 @@ func (state *RuntimeState) Backend(id string) *view.BackendResponse {
 		Enabled: backend.Enabled,
 	}
 	if status, ok := state.BackendStatus(id); ok {
-		resp.Active = status.Active.Load()
-		resp.ErrorCount = status.ErrorCount.Load()
+		snap := status.Snapshot()
+		resp.Active = status.IsActive()
+		resp.ErrorCount = snap.ConsecutiveFailures
 		resp.LastError = status.GetLastError()
 	}
 
@@ -327,11 +414,8 @@ func (rt *Runtime) UpdateBackend(id string, url string, weight int32, enabled bo
 		previous.URL != backend.URL)
 
 	if shouldRecheck {
-		status, ok := rt.State().BackendStatus(id)
-		if ok {
-			status.Active.Store(false)
-			status.ErrorCount.Store(0)
-			status.SetLastError("")
+		if status, ok := rt.State().BackendStatus(id); ok {
+			status.Reset()
 		}
 
 		rt.triggerBackendHealthCheck(*backend)

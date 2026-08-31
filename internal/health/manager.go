@@ -5,6 +5,7 @@ import (
 	"edge-proxy/internal/config"
 	"edge-proxy/internal/logger"
 	"edge-proxy/internal/metrics"
+	"edge-proxy/internal/proxy/runtime"
 	"errors"
 	"net/http"
 	"sync"
@@ -26,7 +27,6 @@ type HealthManager struct {
 	scheduler *Scheduler
 	workers   WorkerPool
 	prober    Prober
-	evaluator *Evaluator
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -63,7 +63,6 @@ func (hm *HealthManager) Start() error {
 	)
 
 	prober := NewHTTPProber(&http.Client{})
-	evaluator := &Evaluator{}
 
 	workers := NewSimpleWorkerPool(
 		hm.processJob,
@@ -76,7 +75,6 @@ func (hm *HealthManager) Start() error {
 	hm.cfg = cfg
 	hm.scheduler = scheduler
 	hm.prober = prober
-	hm.evaluator = evaluator
 	hm.workers = workers
 	hm.started = true
 
@@ -110,7 +108,6 @@ func (hm *HealthManager) Stop() {
 	hm.scheduler = nil
 	hm.workers = nil
 	hm.prober = nil
-	hm.evaluator = nil
 
 	hm.mu.Unlock()
 
@@ -182,10 +179,9 @@ func (hm *HealthManager) processJob(job HealthCheckJob) {
 	hm.mu.RLock()
 	cfg := hm.cfg
 	prober := hm.prober
-	evaluator := hm.evaluator
 	hm.mu.RUnlock()
 
-	if !cfg.Enabled || prober == nil || evaluator == nil {
+	if !cfg.Enabled || prober == nil {
 		return
 	}
 
@@ -202,22 +198,16 @@ func (hm *HealthManager) processJob(job HealthCheckJob) {
 		)
 	}
 
-	changed := evaluator.Evaluate(
-		status,
-		result,
-		cfg.Thresholds,
-	)
+	changed := status.ApplyProbeResult(result.Healthy, result.Err, cfg.Thresholds, time.Now())
 
 	if changed {
+		snap := status.Snapshot()
 		logger.Info("Backend status changed", map[string]interface{}{
-			"backend":     backend.URL,
-			"active":      status.Active.Load(),
-			"healthy":     result.Healthy,
-			"error_count": status.ErrorCount.Load(),
+			"backend":  backend.URL,
+			"status":   logStatus(snap.HealthState),
+			"last_err": snap.LastError,
 		})
 	}
-
-	status.LastHealthCheck.Store(time.Now().Unix())
 }
 
 func (hm *HealthManager) Reconcile(cfg config.HealthCheckConfig) error {
@@ -238,7 +228,6 @@ func (hm *HealthManager) Reconcile(cfg config.HealthCheckConfig) error {
 		scheduler *Scheduler
 		workers   WorkerPool
 		prober    Prober
-		evaluator *Evaluator
 	)
 
 	if cfg.Enabled {
@@ -249,7 +238,6 @@ func (hm *HealthManager) Reconcile(cfg config.HealthCheckConfig) error {
 		)
 
 		prober = NewHTTPProber(&http.Client{})
-		evaluator = &Evaluator{}
 
 		workers = NewSimpleWorkerPool(
 			hm.processJob,
@@ -264,7 +252,6 @@ func (hm *HealthManager) Reconcile(cfg config.HealthCheckConfig) error {
 	hm.scheduler = scheduler
 	hm.workers = workers
 	hm.prober = prober
-	hm.evaluator = evaluator
 
 	hm.mu.Unlock()
 
@@ -288,4 +275,15 @@ func (hm *HealthManager) Reconcile(cfg config.HealthCheckConfig) error {
 	go hm.runLoop(ctx, scheduler, workers)
 
 	return nil
+}
+
+func logStatus(hs runtime.HealthState) string {
+	switch hs {
+	case runtime.HealthHealthy:
+		return "healthy"
+	case runtime.HealthUnhealthy:
+		return "unhealthy"
+	default:
+		return "unknown"
+	}
 }
