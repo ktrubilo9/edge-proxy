@@ -98,7 +98,7 @@ func HealthHandler(rt *runtime.Runtime) http.HandlerFunc {
 
 func activeBackendCount(rt *runtime.Runtime) int {
 	activeCount := 0
-	for _, backend := range rt.GetBackends() {
+	for _, backend := range rt.GetBackendsResponse() {
 		if backend.Enabled && backend.Active {
 			activeCount++
 		}

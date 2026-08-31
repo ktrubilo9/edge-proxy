@@ -340,11 +340,11 @@ func (rt *Runtime) UpdateBackend(id string, url string, weight int32, enabled bo
 	return nil
 }
 
-func (rt *Runtime) GetBackends() []view.BackendResponse {
+func (rt *Runtime) GetBackendsResponse() []view.BackendResponse {
 	return rt.State().Backends()
 }
 
-func (rt *Runtime) GetBackend(id string) *view.BackendResponse {
+func (rt *Runtime) GetBackendResponse(id string) *view.BackendResponse {
 	return rt.State().Backend(id)
 }
 
@@ -546,4 +546,28 @@ func (rt *Runtime) GetVirtualHost(host string) *view.VirtualHostResponse {
 
 func (rt *Runtime) SnapshotView() *config.Snapshot {
 	return rt.State().Snapshot
+}
+
+func (rt *Runtime) GetBackend(id string) *config.BackendConfig {
+	return rt.Config.GetBackend(id)
+}
+
+func (rt *Runtime) GetBackends() []*config.BackendConfig {
+	return rt.State().Snapshot.Raw.Backends
+}
+
+func (rt *Runtime) GetHealthConfig() config.HealthCheckConfig {
+	return rt.State().Snapshot.Raw.HealthCheck
+}
+
+func (rt *Runtime) GetBackendStatus(id string) (*BackendStatus, bool) {
+	state := rt.State()
+
+	status, ok := state.BackendStatus(id)
+	if !ok {
+		return nil, false
+	}
+
+	return status, true
+
 }

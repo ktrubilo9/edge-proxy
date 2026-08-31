@@ -70,7 +70,7 @@
   },
   "logging": {
     "enabled": true,
-    "level": "error",
+    "level": "info",
     "async": true,
     "buffer_size": 65536
   },

@@ -26,7 +26,7 @@ func TestAddEnabledBackendTriggersImmediateHealthCheckAndActivatesHealthyBackend
 	defer backendServer.Close()
 
 	rt := newHealthCheckTestRuntime(t, 60)
-	_ = newHealthCheckerWithCallback(rt)
+	_ = newHealthCheckerWithCallback(t, rt)
 
 	if err := rt.AddBackend(config.BackendConfig{
 		Id:      "backend-2",
@@ -61,7 +61,7 @@ func TestAddEnabledBackendTriggersImmediateHealthCheckAndKeepsUnhealthyBackendIn
 	defer backendServer.Close()
 
 	rt := newHealthCheckTestRuntime(t, 60)
-	_ = newHealthCheckerWithCallback(rt)
+	_ = newHealthCheckerWithCallback(t, rt)
 
 	if err := rt.AddBackend(config.BackendConfig{
 		Id:      "backend-2",
@@ -96,7 +96,7 @@ func TestEnableDisabledBackendTriggersImmediateHealthCheckAndActivatesHealthyBac
 	defer backendServer.Close()
 
 	rt := newHealthCheckTestRuntime(t, 60)
-	_ = newHealthCheckerWithCallback(rt)
+	_ = newHealthCheckerWithCallback(t, rt)
 
 	if err := rt.UpdateBackend("backend-1", backendServer.URL, 1, true); err != nil {
 		t.Fatalf("enable backend: %v", err)
@@ -134,7 +134,7 @@ func TestEnableDisabledBackendTriggersImmediateHealthCheckAndKeepsUnhealthyBacke
 	// Threshold greater than one so the test proves that enable resets
 	// Active=false before the first failed check is evaluated.
 	rt := newHealthCheckTestRuntime(t, 2)
-	_ = newHealthCheckerWithCallback(rt)
+	_ = newHealthCheckerWithCallback(t, rt)
 
 	if err := rt.UpdateBackend("backend-1", backendServer.URL, 1, true); err != nil {
 		t.Fatalf("initially enable backend: %v", err)
@@ -169,15 +169,20 @@ func TestEnableDisabledBackendTriggersImmediateHealthCheckAndKeepsUnhealthyBacke
 	}
 }
 
-func newHealthCheckerWithCallback(rt *runtimepkg.Runtime) *health.HealthChecker {
-	healthConfig := testutil.DefaultHealthCheckConfigWithInterval(60000)
-	hc := health.NewHealthChecker(rt, &healthConfig)
+func newHealthCheckerWithCallback(t *testing.T, rt *runtimepkg.Runtime) *health.HealthManager {
+	hm := health.NewHealthManager(rt, rt.Metrics)
 
 	rt.SetOnBackendHealthCheckRequired(func(backend config.BackendConfig) {
-		go hc.CheckBackend(&backend)
+		go hm.CheckBackend(backend.Id)
 	})
 
-	return hc
+	if err := hm.Start(); err != nil {
+		t.Fatalf("start health manager: %v", err)
+	}
+
+	t.Cleanup(hm.Stop)
+
+	return hm
 }
 
 func newHealthCheckTestRuntime(t *testing.T, healthyThreshold int32) *runtimepkg.Runtime {

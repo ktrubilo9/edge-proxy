@@ -54,7 +54,7 @@ func (s *AdminGRPCServer) RemoveBackend(ctx context.Context, req *adminpb.Remove
 }
 
 func (s *AdminGRPCServer) GetBackends(ctx context.Context, _ *adminpb.Empty) (*adminpb.GetBackendsResponse, error) {
-	backends := s.Runtime.GetBackends()
+	backends := s.Runtime.GetBackendsResponse()
 	resp := &adminpb.GetBackendsResponse{}
 	for _, b := range backends {
 		resp.Backends = append(resp.Backends, backendToPB(b))
@@ -63,7 +63,7 @@ func (s *AdminGRPCServer) GetBackends(ctx context.Context, _ *adminpb.Empty) (*a
 }
 
 func (s *AdminGRPCServer) GetBackend(ctx context.Context, req *adminpb.GetBackendRequest) (*adminpb.BackendResponse, error) {
-	backend := s.Runtime.GetBackend(req.Id)
+	backend := s.Runtime.GetBackendResponse(req.Id)
 	if backend == nil {
 		return nil, status.Error(codes.InvalidArgument, "id does not exists")
 	}

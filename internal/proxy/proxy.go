@@ -25,7 +25,7 @@ import (
 
 type Proxy struct {
 	Runtime       *runtime.Runtime
-	HealthChecker *health.HealthChecker
+	HealthManager *health.HealthManager
 	ConfigPath    string
 	srv           *http.Server
 	opsSrv        *http.Server
@@ -66,8 +66,8 @@ func NewProxy(configPath string) *Proxy {
 		ConfigPath: configPath,
 	}
 
-	hc := rt.State().Snapshot.Raw.HealthCheck
-	proxy.HealthChecker = health.NewHealthChecker(proxy.Runtime, &hc)
+	proxy.HealthManager = health.NewHealthManager(proxy.Runtime, proxy.Runtime.Metrics)
+
 	clientIPs, err := middleware.NewClientIPResolver(os.Getenv("TRUSTED_PROXY_CIDRS"))
 	if err != nil {
 		log.Fatal("Failed to configure trusted proxies: ", err)
@@ -86,7 +86,7 @@ func NewProxy(configPath string) *Proxy {
 		)
 	})
 	proxy.Runtime.SetOnBackendHealthCheckRequired(func(backend config.BackendConfig) {
-		go proxy.HealthChecker.CheckBackend(&backend)
+		proxy.HealthManager.CheckBackend(backend.Id)
 	})
 	return proxy
 }
@@ -111,7 +111,9 @@ func (p *Proxy) Start() error {
 	}
 	p.opsListener = opsListener
 
-	p.HealthChecker.Start(p.Runtime.Metrics)
+	if err := p.HealthManager.Start(); err != nil {
+		return err
+	}
 	p.proxyCollector.Start()
 	p.backendCollector.Start()
 
@@ -184,8 +186,8 @@ func (p *Proxy) Stop(ctx context.Context) error {
 	var shutdownErr error
 
 	p.stopOnce.Do(func() {
-		if p.HealthChecker != nil {
-			p.HealthChecker.Stop()
+		if p.HealthManager != nil {
+			p.HealthManager.Stop()
 		}
 		if p.proxyCollector != nil {
 			p.proxyCollector.Stop()

@@ -3,93 +3,82 @@ package health
 import (
 	"edge-proxy/internal/config"
 	"edge-proxy/internal/proxy/runtime"
-	"encoding/json"
-	"os"
+	"errors"
 	"testing"
 )
 
-func newHealthTestChecker(t *testing.T, threshold int32) (*HealthChecker, *config.BackendConfig, *runtime.BackendStatus) {
-	t.Helper()
-
-	backend := &config.BackendConfig{
-		Id:      "backend-1",
-		URL:     "http://backend-1",
-		Weight:  1,
-		Enabled: true,
-	}
-
-	fullConfig := &config.FullConfig{
-		Server: config.ServerConfig{
-			ProxyPort:     8080,
-			AdminGrpcPort: 50051,
-		},
-		LoadBalancer: config.LoadBalancingConfig{
-			Strategy: "least-connections",
-		},
-		Backends: []*config.BackendConfig{backend},
-		Timeouts: config.TimeoutsConfig{
-			ConnectTimeoutMs:   1000,
-			ResponseTimeoutMs:  1000,
-			KeepAliveTimeoutMs: 1000,
-			IdleConnTimeoutMs:  1000,
-		},
-	}
-
-	configData, err := json.Marshal(fullConfig)
-	if err != nil {
-		t.Fatalf("marshal config: %v", err)
-	}
-	configFile, err := os.CreateTemp(t.TempDir(), "config-*.json")
-	if err != nil {
-		t.Fatalf("create config file: %v", err)
-	}
-	if _, err := configFile.Write(configData); err != nil {
-		_ = configFile.Close()
-		t.Fatalf("write config: %v", err)
-	}
-	if err := configFile.Close(); err != nil {
-		t.Fatalf("close config file: %v", err)
-	}
-
-	rt, err := runtime.NewRuntime(configFile.Name())
-	if err != nil {
-		t.Fatalf("create runtime: %v", err)
-	}
-	current := rt.State()
-	status, ok := current.BackendStatus(backend.Id)
-	if !ok {
-		t.Fatal("missing backend status")
-	}
-	status.Active.Store(true)
-
-	return NewHealthChecker(rt, &fullConfig.HealthCheck), backend, status
+func newBackendStatusForTest(active bool) *runtime.BackendStatus {
+	status := &runtime.BackendStatus{}
+	status.Active.Store(active)
+	return status
 }
 
-func TestUpdateBackendStatusHonorsHealthyThreshold(t *testing.T) {
-	checker, backend, status := newHealthTestChecker(t, 2)
+func TestEvaluatorDeactivatesBackendAtUnhealthyThreshold(t *testing.T) {
+	evaluator := Evaluator{}
+	status := newBackendStatusForTest(true)
 
-	status.ErrorCount.Store(1)
-	checker.UpdateBackendStatus(backend, false)
+	thresholds := config.HealthThresholdConfig{
+		Healthy:   1,
+		Unhealthy: 2,
+	}
+
+	failure := ProbeResult{
+		Healthy: false,
+		Err:     errors.New("backend unavailable"),
+	}
+
+	evaluator.Evaluate(status, failure, thresholds)
+
 	if !status.Active.Load() {
-		t.Fatal("backend became inactive before reaching healthy threshold")
+		t.Fatal("backend became inactive before reaching unhealthy threshold")
 	}
 
-	status.ErrorCount.Store(2)
-	checker.UpdateBackendStatus(backend, false)
+	if got := status.ErrorCount.Load(); got != 1 {
+		t.Fatalf("error count = %d, want 1", got)
+	}
+
+	evaluator.Evaluate(status, failure, thresholds)
+
 	if status.Active.Load() {
-		t.Fatal("backend stayed active after reaching healthy threshold")
+		t.Fatal("backend stayed active after reaching unhealthy threshold")
+	}
+
+	if got := status.ErrorCount.Load(); got != 2 {
+		t.Fatalf("error count = %d, want 2", got)
+	}
+
+	if got := status.GetLastError(); got == "" {
+		t.Fatal("last error was not recorded")
 	}
 }
 
-func TestUpdateBackendStatusReactivatesHealthyBackend(t *testing.T) {
-	checker, backend, status := newHealthTestChecker(t, 3)
+func TestEvaluatorReactivatesHealthyBackend(t *testing.T) {
+	evaluator := Evaluator{}
+	status := newBackendStatusForTest(false)
 
-	status.Active.Store(false)
-	status.ErrorCount.Store(0)
+	status.ErrorCount.Store(3)
+	status.SetLastError("backend unavailable")
 
-	checker.UpdateBackendStatus(backend, true)
+	thresholds := config.HealthThresholdConfig{
+		Healthy:   1,
+		Unhealthy: 3,
+	}
+
+	success := ProbeResult{
+		Healthy: true,
+	}
+
+	evaluator.Evaluate(status, success, thresholds)
 
 	if !status.Active.Load() {
 		t.Fatal("healthy backend was not reactivated")
+	}
+
+	if got := status.ErrorCount.Load(); got != 0 {
+		t.Fatalf("error count = %d, want 0", got)
+	}
+
+	if got := status.GetLastError(); got != "" {
+		t.Fatalf("last error = %q, want empty", got)
 	}
 }
