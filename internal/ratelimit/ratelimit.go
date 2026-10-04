@@ -97,6 +97,8 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	elapsed := now.Sub(b.lastCheck).Seconds()
 	b.lastCheck = now
 
+	// Refill lazily on access instead of maintaining a timer per client. This
+	// keeps idle identities cheap while preserving token-bucket burst behavior.
 	b.tokens += elapsed * b.rate
 	if b.tokens > b.capacity {
 		b.tokens = b.capacity

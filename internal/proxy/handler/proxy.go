@@ -196,6 +196,8 @@ func pathRouteMatches(requestPath string, routePath string) bool {
 	if routePath == "/" {
 		return strings.HasPrefix(requestPath, "/")
 	}
+	// Prefixes match path segments, not arbitrary strings: /api must not route
+	// /apiv2. This also keeps route selection stable as more prefixes are added.
 	return requestPath == routePath || strings.HasPrefix(requestPath, routePath+"/")
 }
 
@@ -250,7 +252,8 @@ func executeProxyRequest(
 			break
 		}
 
-		// Retry idempotent requests once on a different backend to avoid failing fast on a single dead peer.
+		// A retry is allowed only when the request can be replayed safely. Remove
+		// the failed peer so the load balancer cannot select it twice.
 		candidates = filterOutBackend(candidates, backend.Id)
 		if len(candidates) == 0 {
 			break
@@ -287,6 +290,8 @@ func doProxyRequest(
 	state.Metrics.IncrementActiveConnections(backend.URL)
 	defer state.Metrics.DecrementActiveConnections(backend.URL)
 
+	// Clone preserves the inbound request for a possible retry. Bodies are
+	// reopened through GetBody, which is why non-replayable bodies are not retried.
 	req := original.Clone(ctx)
 	if original.Body != nil && original.GetBody != nil {
 		body, bodyErr := original.GetBody()

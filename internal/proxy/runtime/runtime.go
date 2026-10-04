@@ -15,6 +15,8 @@ import (
 )
 
 type RuntimeState struct {
+	// A state is immutable after publication. Request handlers load it once so a
+	// configuration update cannot mix an old router with a new HTTP client.
 	Snapshot     *config.Snapshot
 	HTTPClient   *http.Client
 	LoadBalancer lb.LoadBalancer
@@ -105,6 +107,8 @@ func (s *BackendStatus) ApplyProbeResult(
 	previous := s.healthState
 	s.lastHealthCheck = now
 
+	// A single probe never flips a healthy backend to unhealthy (or back again).
+	// Thresholds dampen transient failures before they affect request routing.
 	if healthy {
 		s.consecutiveFailures = 0
 		s.consecutiveSuccess++
@@ -312,6 +316,8 @@ func (rt *Runtime) applyUpdate(mutate func() error) error {
 		return err
 	}
 
+	// Persist and validate before publishing. Readers either observe the complete
+	// previous state or the complete next state; they never take updateMu.
 	snapshot := rt.Config.Snapshot()
 	previous := rt.State()
 
@@ -322,6 +328,7 @@ func (rt *Runtime) applyUpdate(mutate func() error) error {
 
 	published := rt.state.Swap(next)
 
+	// Retire resources only after the new state is visible to readers.
 	rt.deregisterRemovedBackendMetrics(published, next)
 	closeReplacedHTTPClient(published, next)
 
