@@ -29,7 +29,7 @@ def get_health() -> dict[str, Any]:
         "-T",
         "reverse-proxy",
         "wget",
-        "-q0-",
+        "-qO-",
         HEALTH_URL,
         capture_output=True
     )
@@ -59,7 +59,7 @@ def wait_for_state(
 
             print(
                 "Health state:",
-                json.dumps(health, seperators=(",", ":")),
+                json.dumps(health, separators=(",", ":")),
                 flush=True
             )
 
