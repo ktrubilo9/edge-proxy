@@ -169,6 +169,25 @@ func TestEnableDisabledBackendTriggersImmediateHealthCheckAndKeepsUnhealthyBacke
 	}
 }
 
+func TestDisabledHealthChecksKeepEnabledBackendsActive(t *testing.T) {
+	rt := newHealthCheckTestRuntimeWithEnabled(t, 1, false)
+	status, ok := rt.State().BackendStatus("backend-seed")
+	if !ok {
+		t.Fatal("backend status was not found")
+	}
+	if !status.IsActive() {
+		t.Fatal("enabled backend is inactive while health checks are disabled")
+	}
+
+	if err := rt.UpdateBackend("backend-1", "http://backend-1", 1, true); err != nil {
+		t.Fatalf("enable backend: %v", err)
+	}
+	status, ok = rt.State().BackendStatus("backend-1")
+	if !ok || !status.IsActive() {
+		t.Fatal("newly enabled backend is inactive while health checks are disabled")
+	}
+}
+
 func newHealthCheckerWithCallback(t *testing.T, rt *runtimepkg.Runtime) *health.HealthManager {
 	hm := health.NewHealthManager(rt, rt.Metrics)
 
@@ -186,9 +205,18 @@ func newHealthCheckerWithCallback(t *testing.T, rt *runtimepkg.Runtime) *health.
 }
 
 func newHealthCheckTestRuntime(t *testing.T, healthyThreshold int32) *runtimepkg.Runtime {
+	return newHealthCheckTestRuntimeWithEnabled(t, healthyThreshold, true)
+}
+
+func newHealthCheckTestRuntimeWithEnabled(
+	t *testing.T,
+	healthyThreshold int32,
+	healthEnabled bool,
+) *runtimepkg.Runtime {
 	t.Helper()
 
 	healthConfig := testutil.DefaultHealthCheckConfigWithInterval(60000)
+	healthConfig.Enabled = healthEnabled
 	cfg := config.FullConfig{
 		Server: config.ServerConfig{
 			ProxyPort:     8080,

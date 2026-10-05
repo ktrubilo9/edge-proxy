@@ -3,7 +3,10 @@ package health
 import (
 	"context"
 	"edge-proxy/internal/config"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -22,7 +25,29 @@ type HTTPProber struct {
 }
 
 func NewHTTPProber(client *http.Client) *HTTPProber {
+	if client == nil {
+		client = &http.Client{}
+	}
 	return &HTTPProber{client: client}
+}
+
+func NewConfiguredHTTPProber(cfg config.HealthTransportConfig) *HTTPProber {
+	keepAlive := time.Duration(cfg.KeepAliveMs) * time.Millisecond
+	transport := &http.Transport{
+		MaxIdleConns:        cfg.MaxIdleConns,
+		MaxIdleConnsPerHost: cfg.MaxIdleConnsPerHost,
+		MaxConnsPerHost:     cfg.MaxConnsPerHost,
+		IdleConnTimeout:     keepAlive,
+		ForceAttemptHTTP2:   true,
+		DialContext: (&net.Dialer{
+			KeepAlive: keepAlive,
+		}).DialContext,
+	}
+	return NewHTTPProber(&http.Client{Transport: transport})
+}
+
+func (pr *HTTPProber) CloseIdleConnections() {
+	pr.client.CloseIdleConnections()
 }
 
 type ProbeResult struct {
@@ -37,7 +62,9 @@ func (pr *HTTPProber) Probe(
 	backend *config.BackendConfig,
 	cfg config.HealthProbeConfig,
 ) ProbeResult {
-	url := backend.URL + cfg.Path
+	if backend == nil {
+		return ProbeResult{Err: errors.New("health check backend is nil")}
+	}
 
 	probeCtx, cancel := context.WithTimeout(
 		ctx,
@@ -48,14 +75,11 @@ func (pr *HTTPProber) Probe(
 	req, err := http.NewRequestWithContext(
 		probeCtx,
 		strings.ToUpper(cfg.Method),
-		url,
+		healthURL(backend.URL, cfg.Path),
 		nil,
 	)
 	if err != nil {
-		return ProbeResult{
-			Healthy: false,
-			Err:     err,
-		}
+		return ProbeResult{Err: err}
 	}
 
 	start := time.Now()
@@ -72,6 +96,8 @@ func (pr *HTTPProber) Probe(
 	}
 
 	defer resp.Body.Close()
+	// Draining a small health response lets the transport reuse its connection.
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4<<10))
 
 	if !isSuccessCode(cfg.SuccessCodes, int32(resp.StatusCode)) {
 		return ProbeResult{
@@ -90,6 +116,10 @@ func (pr *HTTPProber) Probe(
 		StatusCode: resp.StatusCode,
 		Duration:   duration,
 	}
+}
+
+func healthURL(backendURL, path string) string {
+	return strings.TrimRight(backendURL, "/") + "/" + strings.TrimLeft(path, "/")
 }
 
 func isSuccessCode(successCodes []int32, statusCode int32) bool {

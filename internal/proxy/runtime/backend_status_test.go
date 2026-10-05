@@ -75,3 +75,25 @@ func TestApplyProbeResultReactivatesHealthyBackend(t *testing.T) {
 		t.Fatalf("last error = %q, want empty", snap.LastError)
 	}
 }
+
+func TestApplyPassiveResultUsesThresholdWithoutReplacingLastActiveCheck(t *testing.T) {
+	status := &BackendStatus{}
+	thresholds := config.HealthThresholdConfig{Healthy: 1, Unhealthy: 2}
+	activeCheckTime := time.Now().Add(-time.Minute)
+	status.ApplyProbeResult(true, nil, thresholds, activeCheckTime)
+
+	failure := errors.New("backend returned status 503")
+	status.ApplyPassiveResult(false, failure, thresholds, time.Now())
+	if !status.IsActive() {
+		t.Fatal("backend became inactive before passive failure threshold")
+	}
+	status.ApplyPassiveResult(false, failure, thresholds, time.Now())
+	if status.IsActive() {
+		t.Fatal("backend stayed active after passive failure threshold")
+	}
+
+	snapshot := status.Snapshot()
+	if !snapshot.LastHealthCheck.Equal(activeCheckTime) {
+		t.Fatalf("last active health check = %s, want %s", snapshot.LastHealthCheck, activeCheckTime)
+	}
+}

@@ -42,7 +42,7 @@ type Runtime struct {
 type HealthState uint8
 
 const (
-	HealthUnknown = iota
+	HealthUnknown HealthState = iota
 	HealthHealthy
 	HealthUnhealthy
 )
@@ -101,11 +101,32 @@ func (s *BackendStatus) ApplyProbeResult(
 	htc config.HealthThresholdConfig,
 	now time.Time,
 ) (changed bool) {
+	return s.applyResult(healthy, probeErr, htc, now, true)
+}
+
+func (s *BackendStatus) ApplyPassiveResult(
+	healthy bool,
+	resultErr error,
+	htc config.HealthThresholdConfig,
+	now time.Time,
+) (changed bool) {
+	return s.applyResult(healthy, resultErr, htc, now, false)
+}
+
+func (s *BackendStatus) applyResult(
+	healthy bool,
+	resultErr error,
+	htc config.HealthThresholdConfig,
+	now time.Time,
+	activeProbe bool,
+) (changed bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	previous := s.healthState
-	s.lastHealthCheck = now
+	if activeProbe {
+		s.lastHealthCheck = now
+	}
 
 	// A single probe never flips a healthy backend to unhealthy (or back again).
 	// Thresholds dampen transient failures before they affect request routing.
@@ -119,8 +140,8 @@ func (s *BackendStatus) ApplyProbeResult(
 	} else {
 		s.consecutiveSuccess = 0
 		s.consecutiveFailures++
-		if probeErr != nil {
-			s.lastError = probeErr.Error()
+		if resultErr != nil {
+			s.lastError = resultErr.Error()
 		}
 		if s.consecutiveFailures >= uint32(htc.Unhealthy) {
 			s.healthState = HealthUnhealthy
@@ -138,6 +159,18 @@ func (s *BackendStatus) Reset() {
 	defer s.mu.Unlock()
 
 	s.healthState = HealthUnknown
+	s.consecutiveFailures = 0
+	s.consecutiveSuccess = 0
+	s.lastError = ""
+	s.lastHealthCheck = time.Time{}
+	s.lastStateChange = time.Time{}
+}
+
+func (s *BackendStatus) MarkHealthy() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.healthState = HealthHealthy
 	s.consecutiveFailures = 0
 	s.consecutiveSuccess = 0
 	s.lastError = ""
@@ -192,7 +225,6 @@ func (state *RuntimeState) Backends() []view.BackendResponse {
 			continue
 		}
 
-		// to update
 		item := view.BackendResponse{
 			Id:      backend.Id,
 			URL:     backend.URL,
@@ -202,9 +234,9 @@ func (state *RuntimeState) Backends() []view.BackendResponse {
 
 		if status, ok := state.BackendStatus(backend.Id); ok {
 			snap := status.Snapshot()
-			item.Active = status.IsActive()
+			item.Active = snap.HealthState == HealthHealthy
 			item.ErrorCount = snap.ConsecutiveFailures
-			item.LastError = status.GetLastError()
+			item.LastError = snap.LastError
 		}
 
 		resp = append(resp, item)
@@ -223,7 +255,6 @@ func (state *RuntimeState) Backend(id string) *view.BackendResponse {
 		return nil
 	}
 
-	// to update
 	resp := &view.BackendResponse{
 		Id:      backend.Id,
 		URL:     backend.URL,
@@ -232,9 +263,9 @@ func (state *RuntimeState) Backend(id string) *view.BackendResponse {
 	}
 	if status, ok := state.BackendStatus(id); ok {
 		snap := status.Snapshot()
-		resp.Active = status.IsActive()
+		resp.Active = snap.HealthState == HealthHealthy
 		resp.ErrorCount = snap.ConsecutiveFailures
-		resp.LastError = status.GetLastError()
+		resp.LastError = snap.LastError
 	}
 
 	return resp
@@ -264,6 +295,17 @@ func (rt *Runtime) buildRuntimeState(previous *RuntimeState, snapshot *config.Sn
 			snapshot.Raw.LoadBalancer.Strategy,
 			rt.Metrics,
 		)
+	}
+
+	if !snapshot.Raw.HealthCheck.Enabled {
+		for _, backend := range snapshot.Raw.Backends {
+			if backend == nil || !backend.Enabled {
+				continue
+			}
+			if status := statuses[backend.Id]; status != nil {
+				status.MarkHealthy()
+			}
+		}
 	}
 
 	return &RuntimeState{
@@ -422,10 +464,16 @@ func (rt *Runtime) UpdateBackend(id string, url string, weight int32, enabled bo
 
 	if shouldRecheck {
 		if status, ok := rt.State().BackendStatus(id); ok {
-			status.Reset()
+			if rt.GetHealthConfig().Enabled {
+				status.Reset()
+			} else {
+				status.MarkHealthy()
+			}
 		}
 
-		rt.triggerBackendHealthCheck(*backend)
+		if rt.GetHealthConfig().Enabled {
+			rt.triggerBackendHealthCheck(*backend)
+		}
 	}
 
 	return nil

@@ -106,7 +106,8 @@ Send a request through the configured virtual host:
 curl -H "Host: app.example.local" http://localhost:8080/
 ```
 
-Backends may remain unavailable briefly until the first health check succeeds.
+Health checks start immediately. A backend becomes available after it reaches
+the configured healthy threshold.
 
 ## Configuration
 
@@ -133,10 +134,27 @@ Important fields:
 | `backends` | Upstream backend definitions with stable `id` values |
 | `virtual_hosts` | Host-based routing policies using `backend_ids` |
 | `path_routes` | Optional path-specific backend selection |
-| `health_check` | Health-check interval, timeout, path, and status codes |
+| `health_check` | Active and passive checks, scheduling, thresholds, concurrency, recovery backoff, and transport limits |
 | `timeouts` | Outbound HTTP transport timeouts |
 | `logging` | Log level and asynchronous logging settings |
 | `security.policies` | Reusable security policies referenced by `security_policy_id` |
+
+### Backend health
+
+When active health checking is enabled, every configured backend is checked
+immediately at startup and then according to `schedule.interval_ms` with
+optional `schedule.jitter_ms`. Checks run in a bounded worker pool. Duplicate
+checks for the same backend are coalesced, and work that does not fit in the
+queue is retried during the next scheduling cycle.
+
+`thresholds.healthy` and `thresholds.unhealthy` define how many consecutive
+results are required to change backend state. Recovery backoff reduces probe
+frequency for unhealthy backends and is capped by `recovery.backoff.max_ms`.
+
+When passive checking is enabled, upstream connection errors and HTTP 5xx
+responses count as failures, while responses below 500 count as successes.
+Passive observations use the same thresholds as active probes. If health
+checking is disabled, enabled backends are considered available immediately.
 
 Runtime changes made through the admin API are persisted to the configured JSON
 file. Mount that file as a volume when configuration must survive container

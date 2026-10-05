@@ -7,6 +7,7 @@ import (
 	"edge-proxy/internal/logger"
 	"edge-proxy/internal/proxy/runtime"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -317,7 +318,38 @@ func doProxyRequest(
 		req.URL.RawPath = req.URL.Path
 	}
 
-	return current.HTTPClient.Do(req)
+	resp, err := current.HTTPClient.Do(req)
+	recordPassiveHealth(current, backend, resp, err)
+	return resp, err
+}
+
+func recordPassiveHealth(
+	current *runtime.RuntimeState,
+	backend *config.BackendConfig,
+	resp *http.Response,
+	requestErr error,
+) {
+	healthCfg := current.Snapshot.Raw.HealthCheck
+	if !healthCfg.Enabled || !healthCfg.Passive.Enabled {
+		return
+	}
+
+	healthy := requestErr == nil && resp != nil && resp.StatusCode < http.StatusInternalServerError
+	resultErr := requestErr
+	if resultErr == nil && !healthy && resp != nil {
+		resultErr = fmt.Errorf("backend returned status %d", resp.StatusCode)
+	}
+
+	status, ok := current.BackendStatus(backend.Id)
+	if !ok {
+		return
+	}
+	if status.ApplyPassiveResult(healthy, resultErr, healthCfg.Thresholds, time.Now()) {
+		logger.Info("Passive health changed backend status", map[string]interface{}{
+			"backend": backend.URL,
+			"healthy": healthy,
+		})
+	}
 }
 
 func isRetryableRequest(r *http.Request) bool {

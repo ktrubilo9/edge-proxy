@@ -425,3 +425,48 @@ func TestProxyHandlerRetriesIdempotentRequestOnAlternateBackend(t *testing.T) {
 		t.Fatalf("body = %q, want %q", string(body), "healthy")
 	}
 }
+
+func TestProxyHandlerPassiveHealthDeactivatesFailingBackend(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer backend.Close()
+
+	healthConfig := testutil.DefaultHealthCheckConfig()
+	healthConfig.Passive.Enabled = true
+	healthConfig.Thresholds.Unhealthy = 1
+	fullConfig := &config.FullConfig{
+		Server:       config.ServerConfig{ProxyPort: 8080, AdminGrpcPort: 50051},
+		LoadBalancer: config.LoadBalancingConfig{Strategy: "least-connections"},
+		Backends: []*config.BackendConfig{
+			{Id: "backend", URL: backend.URL, Weight: 1, Enabled: true},
+		},
+		HealthCheck: healthConfig,
+		Timeouts: config.TimeoutsConfig{
+			ConnectTimeoutMs:   1000,
+			ResponseTimeoutMs:  1000,
+			KeepAliveTimeoutMs: 1000,
+			IdleConnTimeoutMs:  1000,
+		},
+		VirtualHosts: []config.VirtualHost{
+			{Domain: "app.local", BackendIDs: []string{"backend"}, SecurityPolicyID: "default"},
+		},
+	}
+	rt := newTestRuntime(t, fullConfig)
+
+	req := httptest.NewRequest(http.MethodGet, "http://app.local/", nil)
+	req.Host = "app.local"
+	rec := httptest.NewRecorder()
+	ProxyHandler(rt).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+	status, ok := rt.State().BackendStatus("backend")
+	if !ok {
+		t.Fatal("missing backend status")
+	}
+	if status.IsActive() {
+		t.Fatal("passive health did not deactivate failing backend")
+	}
+}
