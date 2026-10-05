@@ -39,6 +39,8 @@ func (r *ClientIPResolver) Resolve(req *http.Request) string {
 		return req.RemoteAddr
 	}
 
+	// Forwarded headers are client-controlled unless the direct peer is trusted.
+	// This prevents an internet client from choosing its own rate-limit identity.
 	if !r.isTrusted(remoteIP) {
 		return remoteIP.String()
 	}
@@ -58,6 +60,8 @@ func (r *ClientIPResolver) Resolve(req *http.Request) string {
 		chain = append(chain, ip)
 	}
 
+	// Walk right to left: each trusted proxy may attest only to the hop directly
+	// before it. The first untrusted address is the effective client.
 	for i := len(chain) - 1; i >= 0; i-- {
 		if !r.isTrusted(chain[i]) {
 			return chain[i].String()
@@ -72,6 +76,7 @@ func (r *ClientIPResolver) Resolve(req *http.Request) string {
 
 func (r *ClientIPResolver) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// Downstream code receives one canonical value rather than untrusted input.
 		req.Header.Set("X-Forwarded-For", r.Resolve(req))
 		next.ServeHTTP(w, req)
 	})

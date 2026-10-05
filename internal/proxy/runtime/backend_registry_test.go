@@ -2,8 +2,10 @@ package runtime
 
 import (
 	"edge-proxy/internal/config"
+	"errors"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestBackendRegistryReconcileAddsNewBackends(t *testing.T) {
@@ -28,9 +30,12 @@ func TestBackendRegistryReconcilePreservesExistingStatus(t *testing.T) {
 	if !ok {
 		t.Fatal("expected initial backend status")
 	}
-	original.Active.Store(true)
-	original.ErrorCount.Store(3)
-	original.SetLastError("temporary failure")
+
+	thresholds := config.HealthThresholdConfig{Healthy: 1, Unhealthy: 5}
+	failure := errors.New("temporary failure")
+	for i := 0; i < 3; i++ {
+		original.ApplyProbeResult(false, failure, thresholds, time.Now())
+	}
 
 	registry.Reconcile(backends)
 
@@ -41,8 +46,10 @@ func TestBackendRegistryReconcilePreservesExistingStatus(t *testing.T) {
 	if current != original {
 		t.Fatal("reconcile replaced the existing backend status")
 	}
-	if !current.Active.Load() || current.ErrorCount.Load() != 3 {
-		t.Fatal("reconcile did not preserve backend state")
+
+	snap := current.Snapshot()
+	if snap.ConsecutiveFailures != 3 {
+		t.Fatalf("consecutive failures = %d, want 3", snap.ConsecutiveFailures)
 	}
 	if got := current.GetLastError(); got != "temporary failure" {
 		t.Fatalf("last error = %q, want %q", got, "temporary failure")

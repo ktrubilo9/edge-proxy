@@ -31,7 +31,9 @@ func LoadConfig(path string) (*FullConfig, error) {
 		return nil, err
 	}
 
-	// Runtime code works with resolved values so backends and ports can come from the environment.
+	// Resolve placeholders before validation so runtime code has one concrete
+	// configuration shape. Consequently, a later SaveConfig writes resolved
+	// values rather than the original env: expressions.
 	resolved := ResolveEnvVars(raw)
 	resolvedData, err := json.Marshal(resolved)
 	if err != nil {
@@ -53,6 +55,9 @@ func SaveConfig(path string, cfg *FullConfig) error {
 		return err
 	}
 
+	// Write then rename so a crash cannot leave a partially encoded JSON file at
+	// the configured path. The temporary file must share its directory because
+	// rename atomicity is only expected on the same filesystem.
 	tmpPath := path + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
 		return err

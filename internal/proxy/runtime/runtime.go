@@ -15,6 +15,8 @@ import (
 )
 
 type RuntimeState struct {
+	// A state is immutable after publication. Request handlers load it once so a
+	// configuration update cannot mix an old router with a new HTTP client.
 	Snapshot     *config.Snapshot
 	HTTPClient   *http.Client
 	LoadBalancer lb.LoadBalancer
@@ -37,24 +39,141 @@ type Runtime struct {
 	onBackendHealthCheckRequired func(backend config.BackendConfig)
 }
 
+type HealthState uint8
+
+const (
+	HealthUnknown HealthState = iota
+	HealthHealthy
+	HealthUnhealthy
+)
+
 type BackendStatus struct {
-	Active          atomic.Bool
-	ErrorCount      atomic.Uint32
-	mu              sync.RWMutex
-	LastError       string
-	LastHealthCheck atomic.Int64
+	healthState HealthState
+
+	consecutiveFailures uint32
+	consecutiveSuccess  uint32
+
+	lastError       string
+	lastHealthCheck time.Time
+	lastStateChange time.Time
+
+	mu sync.RWMutex
 }
 
-func (bs *BackendStatus) SetLastError(err string) {
-	bs.mu.Lock()
-	defer bs.mu.Unlock()
-	bs.LastError = err
+type BackendStatusSnapshot struct {
+	HealthState          HealthState
+	ConsecutiveFailures  uint32
+	ConsecutiveSuccesses uint32
+	LastError            string
+	LastHealthCheck      time.Time
+	LastStateChange      time.Time
 }
 
-func (bs *BackendStatus) GetLastError() string {
-	bs.mu.RLock()
-	defer bs.mu.RUnlock()
-	return bs.LastError
+func (s *BackendStatus) Snapshot() BackendStatusSnapshot {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return BackendStatusSnapshot{
+		HealthState:          s.healthState,
+		ConsecutiveFailures:  s.consecutiveFailures,
+		ConsecutiveSuccesses: s.consecutiveSuccess,
+		LastError:            s.lastError,
+		LastHealthCheck:      s.lastHealthCheck,
+		LastStateChange:      s.lastStateChange,
+	}
+}
+
+func (s *BackendStatus) IsActive() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.healthState == HealthHealthy
+}
+
+func (s *BackendStatus) GetLastError() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastError
+}
+
+func (s *BackendStatus) ApplyProbeResult(
+	healthy bool,
+	probeErr error,
+	htc config.HealthThresholdConfig,
+	now time.Time,
+) (changed bool) {
+	return s.applyResult(healthy, probeErr, htc, now, true)
+}
+
+func (s *BackendStatus) ApplyPassiveResult(
+	healthy bool,
+	resultErr error,
+	htc config.HealthThresholdConfig,
+	now time.Time,
+) (changed bool) {
+	return s.applyResult(healthy, resultErr, htc, now, false)
+}
+
+func (s *BackendStatus) applyResult(
+	healthy bool,
+	resultErr error,
+	htc config.HealthThresholdConfig,
+	now time.Time,
+	activeProbe bool,
+) (changed bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	previous := s.healthState
+	if activeProbe {
+		s.lastHealthCheck = now
+	}
+
+	// A single probe never flips a healthy backend to unhealthy (or back again).
+	// Thresholds dampen transient failures before they affect request routing.
+	if healthy {
+		s.consecutiveFailures = 0
+		s.consecutiveSuccess++
+		s.lastError = ""
+		if s.consecutiveSuccess >= uint32(htc.Healthy) {
+			s.healthState = HealthHealthy
+		}
+	} else {
+		s.consecutiveSuccess = 0
+		s.consecutiveFailures++
+		if resultErr != nil {
+			s.lastError = resultErr.Error()
+		}
+		if s.consecutiveFailures >= uint32(htc.Unhealthy) {
+			s.healthState = HealthUnhealthy
+		}
+	}
+	if previous != s.healthState {
+		s.lastStateChange = now
+		return true
+	}
+	return false
+}
+
+func (s *BackendStatus) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.healthState = HealthUnknown
+	s.consecutiveFailures = 0
+	s.consecutiveSuccess = 0
+	s.lastError = ""
+	s.lastHealthCheck = time.Time{}
+	s.lastStateChange = time.Time{}
+}
+
+func (s *BackendStatus) MarkHealthy() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.healthState = HealthHealthy
+	s.consecutiveFailures = 0
+	s.consecutiveSuccess = 0
+	s.lastError = ""
 }
 
 func NewRuntime(configPath string) (*Runtime, error) {
@@ -112,10 +231,12 @@ func (state *RuntimeState) Backends() []view.BackendResponse {
 			Weight:  backend.Weight,
 			Enabled: backend.Enabled,
 		}
+
 		if status, ok := state.BackendStatus(backend.Id); ok {
-			item.Active = status.Active.Load()
-			item.ErrorCount = status.ErrorCount.Load()
-			item.LastError = status.GetLastError()
+			snap := status.Snapshot()
+			item.Active = snap.HealthState == HealthHealthy
+			item.ErrorCount = snap.ConsecutiveFailures
+			item.LastError = snap.LastError
 		}
 
 		resp = append(resp, item)
@@ -141,9 +262,10 @@ func (state *RuntimeState) Backend(id string) *view.BackendResponse {
 		Enabled: backend.Enabled,
 	}
 	if status, ok := state.BackendStatus(id); ok {
-		resp.Active = status.Active.Load()
-		resp.ErrorCount = status.ErrorCount.Load()
-		resp.LastError = status.GetLastError()
+		snap := status.Snapshot()
+		resp.Active = snap.HealthState == HealthHealthy
+		resp.ErrorCount = snap.ConsecutiveFailures
+		resp.LastError = snap.LastError
 	}
 
 	return resp
@@ -173,6 +295,17 @@ func (rt *Runtime) buildRuntimeState(previous *RuntimeState, snapshot *config.Sn
 			snapshot.Raw.LoadBalancer.Strategy,
 			rt.Metrics,
 		)
+	}
+
+	if !snapshot.Raw.HealthCheck.Enabled {
+		for _, backend := range snapshot.Raw.Backends {
+			if backend == nil || !backend.Enabled {
+				continue
+			}
+			if status := statuses[backend.Id]; status != nil {
+				status.MarkHealthy()
+			}
+		}
 	}
 
 	return &RuntimeState{
@@ -225,6 +358,8 @@ func (rt *Runtime) applyUpdate(mutate func() error) error {
 		return err
 	}
 
+	// Persist and validate before publishing. Readers either observe the complete
+	// previous state or the complete next state; they never take updateMu.
 	snapshot := rt.Config.Snapshot()
 	previous := rt.State()
 
@@ -235,6 +370,7 @@ func (rt *Runtime) applyUpdate(mutate func() error) error {
 
 	published := rt.state.Swap(next)
 
+	// Retire resources only after the new state is visible to readers.
 	rt.deregisterRemovedBackendMetrics(published, next)
 	closeReplacedHTTPClient(published, next)
 
@@ -327,24 +463,27 @@ func (rt *Runtime) UpdateBackend(id string, url string, weight int32, enabled bo
 		previous.URL != backend.URL)
 
 	if shouldRecheck {
-		status, ok := rt.State().BackendStatus(id)
-		if ok {
-			status.Active.Store(false)
-			status.ErrorCount.Store(0)
-			status.SetLastError("")
+		if status, ok := rt.State().BackendStatus(id); ok {
+			if rt.GetHealthConfig().Enabled {
+				status.Reset()
+			} else {
+				status.MarkHealthy()
+			}
 		}
 
-		rt.triggerBackendHealthCheck(*backend)
+		if rt.GetHealthConfig().Enabled {
+			rt.triggerBackendHealthCheck(*backend)
+		}
 	}
 
 	return nil
 }
 
-func (rt *Runtime) GetBackends() []view.BackendResponse {
+func (rt *Runtime) GetBackendsResponse() []view.BackendResponse {
 	return rt.State().Backends()
 }
 
-func (rt *Runtime) GetBackend(id string) *view.BackendResponse {
+func (rt *Runtime) GetBackendResponse(id string) *view.BackendResponse {
 	return rt.State().Backend(id)
 }
 
@@ -546,4 +685,28 @@ func (rt *Runtime) GetVirtualHost(host string) *view.VirtualHostResponse {
 
 func (rt *Runtime) SnapshotView() *config.Snapshot {
 	return rt.State().Snapshot
+}
+
+func (rt *Runtime) GetBackend(id string) *config.BackendConfig {
+	return rt.Config.GetBackend(id)
+}
+
+func (rt *Runtime) GetBackends() []*config.BackendConfig {
+	return rt.State().Snapshot.Raw.Backends
+}
+
+func (rt *Runtime) GetHealthConfig() config.HealthCheckConfig {
+	return rt.State().Snapshot.Raw.HealthCheck
+}
+
+func (rt *Runtime) GetBackendStatus(id string) (*BackendStatus, bool) {
+	state := rt.State()
+
+	status, ok := state.BackendStatus(id)
+	if !ok {
+		return nil, false
+	}
+
+	return status, true
+
 }

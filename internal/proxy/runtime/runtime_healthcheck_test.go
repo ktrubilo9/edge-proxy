@@ -13,6 +13,7 @@ import (
 	"edge-proxy/internal/config"
 	"edge-proxy/internal/health"
 	runtimepkg "edge-proxy/internal/proxy/runtime"
+	"edge-proxy/internal/testutil"
 )
 
 func TestAddEnabledBackendTriggersImmediateHealthCheckAndActivatesHealthyBackend(t *testing.T) {
@@ -25,7 +26,7 @@ func TestAddEnabledBackendTriggersImmediateHealthCheckAndActivatesHealthyBackend
 	defer backendServer.Close()
 
 	rt := newHealthCheckTestRuntime(t, 60)
-	_ = newHealthCheckerWithCallback(rt)
+	_ = newHealthCheckerWithCallback(t, rt)
 
 	if err := rt.AddBackend(config.BackendConfig{
 		Id:      "backend-2",
@@ -42,10 +43,10 @@ func TestAddEnabledBackendTriggersImmediateHealthCheckAndActivatesHealthyBackend
 	}
 
 	waitFor(t, time.Second, func() bool {
-		return checks.Load() >= 1 && status.Active.Load()
+		return checks.Load() >= 1 && status.IsActive()
 	})
 
-	if !status.Active.Load() {
+	if !status.IsActive() {
 		t.Fatal("healthy backend was not activated after the immediate health check")
 	}
 }
@@ -60,7 +61,7 @@ func TestAddEnabledBackendTriggersImmediateHealthCheckAndKeepsUnhealthyBackendIn
 	defer backendServer.Close()
 
 	rt := newHealthCheckTestRuntime(t, 60)
-	_ = newHealthCheckerWithCallback(rt)
+	_ = newHealthCheckerWithCallback(t, rt)
 
 	if err := rt.AddBackend(config.BackendConfig{
 		Id:      "backend-2",
@@ -80,7 +81,7 @@ func TestAddEnabledBackendTriggersImmediateHealthCheckAndKeepsUnhealthyBackendIn
 		return checks.Load() >= 1
 	})
 
-	if status.Active.Load() {
+	if status.IsActive() {
 		t.Fatal("unhealthy backend became active after the immediate health check")
 	}
 }
@@ -95,7 +96,7 @@ func TestEnableDisabledBackendTriggersImmediateHealthCheckAndActivatesHealthyBac
 	defer backendServer.Close()
 
 	rt := newHealthCheckTestRuntime(t, 60)
-	_ = newHealthCheckerWithCallback(rt)
+	_ = newHealthCheckerWithCallback(t, rt)
 
 	if err := rt.UpdateBackend("backend-1", backendServer.URL, 1, true); err != nil {
 		t.Fatalf("enable backend: %v", err)
@@ -107,10 +108,10 @@ func TestEnableDisabledBackendTriggersImmediateHealthCheckAndActivatesHealthyBac
 	}
 
 	waitFor(t, time.Second, func() bool {
-		return checks.Load() >= 1 && status.Active.Load()
+		return checks.Load() >= 1 && status.IsActive()
 	})
 
-	if !status.Active.Load() {
+	if !status.IsActive() {
 		t.Fatal("healthy backend was not activated after enable")
 	}
 }
@@ -133,7 +134,7 @@ func TestEnableDisabledBackendTriggersImmediateHealthCheckAndKeepsUnhealthyBacke
 	// Threshold greater than one so the test proves that enable resets
 	// Active=false before the first failed check is evaluated.
 	rt := newHealthCheckTestRuntime(t, 2)
-	_ = newHealthCheckerWithCallback(rt)
+	_ = newHealthCheckerWithCallback(t, rt)
 
 	if err := rt.UpdateBackend("backend-1", backendServer.URL, 1, true); err != nil {
 		t.Fatalf("initially enable backend: %v", err)
@@ -145,7 +146,7 @@ func TestEnableDisabledBackendTriggersImmediateHealthCheckAndKeepsUnhealthyBacke
 	}
 
 	waitFor(t, time.Second, func() bool {
-		return checks.Load() >= 1 && status.Active.Load()
+		return checks.Load() >= 1 && status.IsActive()
 	})
 
 	if err := rt.UpdateBackend("backend-1", backendServer.URL, 1, false); err != nil {
@@ -163,30 +164,59 @@ func TestEnableDisabledBackendTriggersImmediateHealthCheckAndKeepsUnhealthyBacke
 		return checks.Load() > previousChecks
 	})
 
-	if status.Active.Load() {
+	if status.IsActive() {
 		t.Fatal("unhealthy backend remained active after re-enable and immediate health check")
 	}
 }
 
-func newHealthCheckerWithCallback(rt *runtimepkg.Runtime) *health.HealthChecker {
-	hc := health.NewHealthChecker(rt, &config.HealthCheckConfig{
-		Path:             "/health",
-		IntervalSeconds:  60,
-		TimeoutSeconds:   1,
-		HealthyThreshold: 1,
-		SuccessCodes:     []int32{http.StatusOK},
-	})
+func TestDisabledHealthChecksKeepEnabledBackendsActive(t *testing.T) {
+	rt := newHealthCheckTestRuntimeWithEnabled(t, 1, false)
+	status, ok := rt.State().BackendStatus("backend-seed")
+	if !ok {
+		t.Fatal("backend status was not found")
+	}
+	if !status.IsActive() {
+		t.Fatal("enabled backend is inactive while health checks are disabled")
+	}
+
+	if err := rt.UpdateBackend("backend-1", "http://backend-1", 1, true); err != nil {
+		t.Fatalf("enable backend: %v", err)
+	}
+	status, ok = rt.State().BackendStatus("backend-1")
+	if !ok || !status.IsActive() {
+		t.Fatal("newly enabled backend is inactive while health checks are disabled")
+	}
+}
+
+func newHealthCheckerWithCallback(t *testing.T, rt *runtimepkg.Runtime) *health.HealthManager {
+	hm := health.NewHealthManager(rt, rt.Metrics)
 
 	rt.SetOnBackendHealthCheckRequired(func(backend config.BackendConfig) {
-		go hc.CheckBackend(&backend)
+		go hm.CheckBackend(backend.Id)
 	})
 
-	return hc
+	if err := hm.Start(); err != nil {
+		t.Fatalf("start health manager: %v", err)
+	}
+
+	t.Cleanup(hm.Stop)
+
+	return hm
 }
 
 func newHealthCheckTestRuntime(t *testing.T, healthyThreshold int32) *runtimepkg.Runtime {
+	return newHealthCheckTestRuntimeWithEnabled(t, healthyThreshold, true)
+}
+
+func newHealthCheckTestRuntimeWithEnabled(
+	t *testing.T,
+	healthyThreshold int32,
+	healthEnabled bool,
+) *runtimepkg.Runtime {
 	t.Helper()
 
+	healthConfig := testutil.DefaultHealthCheckConfigWithInterval(60000)
+	healthConfig.Enabled = healthEnabled
 	cfg := config.FullConfig{
 		Server: config.ServerConfig{
 			ProxyPort:     8080,
@@ -209,13 +239,7 @@ func newHealthCheckTestRuntime(t *testing.T, healthyThreshold int32) *runtimepkg
 				Enabled: true,
 			},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  60,
-			TimeoutSeconds:   1,
-			HealthyThreshold: healthyThreshold,
-			SuccessCodes:     []int32{http.StatusOK},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   1000,
 			ResponseTimeoutMs:  2000,

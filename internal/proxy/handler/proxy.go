@@ -7,6 +7,7 @@ import (
 	"edge-proxy/internal/logger"
 	"edge-proxy/internal/proxy/runtime"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -93,7 +94,7 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 			if b == nil || !b.Enabled {
 				continue
 			}
-			if status, ok := current.BackendStatus(b.Id); ok && status.Active.Load() {
+			if status, ok := current.BackendStatus(b.Id); ok && status.IsActive() {
 				backends = append(backends, b)
 			}
 		}
@@ -196,6 +197,8 @@ func pathRouteMatches(requestPath string, routePath string) bool {
 	if routePath == "/" {
 		return strings.HasPrefix(requestPath, "/")
 	}
+	// Prefixes match path segments, not arbitrary strings: /api must not route
+	// /apiv2. This also keeps route selection stable as more prefixes are added.
 	return requestPath == routePath || strings.HasPrefix(requestPath, routePath+"/")
 }
 
@@ -250,7 +253,8 @@ func executeProxyRequest(
 			break
 		}
 
-		// Retry idempotent requests once on a different backend to avoid failing fast on a single dead peer.
+		// A retry is allowed only when the request can be replayed safely. Remove
+		// the failed peer so the load balancer cannot select it twice.
 		candidates = filterOutBackend(candidates, backend.Id)
 		if len(candidates) == 0 {
 			break
@@ -287,6 +291,8 @@ func doProxyRequest(
 	state.Metrics.IncrementActiveConnections(backend.URL)
 	defer state.Metrics.DecrementActiveConnections(backend.URL)
 
+	// Clone preserves the inbound request for a possible retry. Bodies are
+	// reopened through GetBody, which is why non-replayable bodies are not retried.
 	req := original.Clone(ctx)
 	if original.Body != nil && original.GetBody != nil {
 		body, bodyErr := original.GetBody()
@@ -312,7 +318,38 @@ func doProxyRequest(
 		req.URL.RawPath = req.URL.Path
 	}
 
-	return current.HTTPClient.Do(req)
+	resp, err := current.HTTPClient.Do(req)
+	recordPassiveHealth(current, backend, resp, err)
+	return resp, err
+}
+
+func recordPassiveHealth(
+	current *runtime.RuntimeState,
+	backend *config.BackendConfig,
+	resp *http.Response,
+	requestErr error,
+) {
+	healthCfg := current.Snapshot.Raw.HealthCheck
+	if !healthCfg.Enabled || !healthCfg.Passive.Enabled {
+		return
+	}
+
+	healthy := requestErr == nil && resp != nil && resp.StatusCode < http.StatusInternalServerError
+	resultErr := requestErr
+	if resultErr == nil && !healthy && resp != nil {
+		resultErr = fmt.Errorf("backend returned status %d", resp.StatusCode)
+	}
+
+	status, ok := current.BackendStatus(backend.Id)
+	if !ok {
+		return
+	}
+	if status.ApplyPassiveResult(healthy, resultErr, healthCfg.Thresholds, time.Now()) {
+		logger.Info("Passive health changed backend status", map[string]interface{}{
+			"backend": backend.URL,
+			"healthy": healthy,
+		})
+	}
 }
 
 func isRetryableRequest(r *http.Request) bool {

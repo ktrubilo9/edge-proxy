@@ -2,6 +2,7 @@ package handler
 
 import (
 	"edge-proxy/internal/config"
+	"edge-proxy/internal/testutil"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ func TestProxyHandlerServesTrafficDuringRuntimeUpdates(t *testing.T) {
 	backendA := newRuntimeUpdateBackend(t, "A")
 	backendB := newRuntimeUpdateBackend(t, "B")
 
+	healthConfig := testutil.DefaultHealthCheckConfig()
 	cfg := &config.FullConfig{
 		Server: config.ServerConfig{
 			ProxyPort:     8080,
@@ -27,13 +29,7 @@ func TestProxyHandlerServesTrafficDuringRuntimeUpdates(t *testing.T) {
 			{Id: "backend-a", URL: backendA.URL, Weight: 1, Enabled: true},
 			{Id: "backend-b", URL: backendB.URL, Weight: 1, Enabled: true},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 1,
-			SuccessCodes:     []int32{http.StatusOK},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   500,
 			ResponseTimeoutMs:  2000,

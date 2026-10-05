@@ -3,7 +3,9 @@ package handler
 import (
 	"edge-proxy/internal/config"
 	"edge-proxy/internal/proxy/runtime"
+	"edge-proxy/internal/testutil"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"sync/atomic"
 )
@@ -41,7 +44,7 @@ func newTestRuntime(t *testing.T, fullConfig *config.FullConfig) *runtime.Runtim
 		if !ok {
 			t.Fatalf("missing backend status for %s", backend.URL)
 		}
-		status.Active.Store(true)
+		status.ApplyProbeResult(true, nil, config.HealthThresholdConfig{Healthy: 1, Unhealthy: 1}, time.Now())
 	}
 
 	return rt
@@ -49,7 +52,7 @@ func newTestRuntime(t *testing.T, fullConfig *config.FullConfig) *runtime.Runtim
 
 func newSingleRouteTestRuntime(t *testing.T, host string, backendURL string, route *config.PathRoute) *runtime.Runtime {
 	t.Helper()
-
+	healthConfig := testutil.DefaultHealthCheckConfig()
 	fullConfig := &config.FullConfig{
 		Server: config.ServerConfig{
 			ProxyPort:     8080,
@@ -61,13 +64,7 @@ func newSingleRouteTestRuntime(t *testing.T, host string, backendURL string, rou
 		Backends: []*config.BackendConfig{
 			{Id: "backend", URL: backendURL, Weight: 1, Enabled: true},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 1,
-			SuccessCodes:     []int32{200},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   1000,
 			ResponseTimeoutMs:  1000,
@@ -104,7 +101,7 @@ func TestProxyHandlerUnknownHostReturnsForbidden(t *testing.T) {
 	if !ok {
 		t.Fatal("missing backend status")
 	}
-	status.Active.Store(false)
+	status.ApplyProbeResult(false, errors.New("forced inactive for test"), config.HealthThresholdConfig{Healthy: 1, Unhealthy: 1}, time.Now())
 
 	req := httptest.NewRequest(http.MethodGet, "http://unknown.local/", nil)
 	req.Host = "unknown.local"
@@ -202,6 +199,7 @@ func TestProxyHandlerPathRouteRequiresBoundaryMatch(t *testing.T) {
 	}))
 	defer apiBackend.Close()
 
+	healthConfig := testutil.DefaultHealthCheckConfig()
 	fullConfig := &config.FullConfig{
 		Server: config.ServerConfig{
 			ProxyPort:     8080,
@@ -214,13 +212,7 @@ func TestProxyHandlerPathRouteRequiresBoundaryMatch(t *testing.T) {
 			{Id: "default", URL: defaultBackend.URL, Weight: 1, Enabled: true},
 			{Id: "api", URL: apiBackend.URL, Weight: 1, Enabled: true},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 1,
-			SuccessCodes:     []int32{200},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   1000,
 			ResponseTimeoutMs:  1000,
@@ -300,6 +292,7 @@ func TestProxyHandlerPrefersLongestMatchingPathRoute(t *testing.T) {
 	}))
 	defer v1Backend.Close()
 
+	healthConfig := testutil.DefaultHealthCheckConfig()
 	fullConfig := &config.FullConfig{
 		Server: config.ServerConfig{
 			ProxyPort:     8080,
@@ -312,13 +305,7 @@ func TestProxyHandlerPrefersLongestMatchingPathRoute(t *testing.T) {
 			{Id: "api", URL: apiBackend.URL, Weight: 1, Enabled: true},
 			{Id: "api-v1", URL: v1Backend.URL, Weight: 1, Enabled: true},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 1,
-			SuccessCodes:     []int32{200},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   1000,
 			ResponseTimeoutMs:  1000,
@@ -392,6 +379,7 @@ func TestProxyHandlerRetriesIdempotentRequestOnAlternateBackend(t *testing.T) {
 	}))
 	defer healthyBackend.Close()
 
+	healthConfig := testutil.DefaultHealthCheckConfig()
 	fullConfig := &config.FullConfig{
 		Server: config.ServerConfig{
 			ProxyPort:     8080,
@@ -404,13 +392,7 @@ func TestProxyHandlerRetriesIdempotentRequestOnAlternateBackend(t *testing.T) {
 			{Id: "dead", URL: "http://127.0.0.1:1", Weight: 1, Enabled: true},
 			{Id: "healthy", URL: healthyBackend.URL, Weight: 1, Enabled: true},
 		},
-		HealthCheck: config.HealthCheckConfig{
-			Path:             "/health",
-			IntervalSeconds:  1,
-			TimeoutSeconds:   1,
-			HealthyThreshold: 1,
-			SuccessCodes:     []int32{200},
-		},
+		HealthCheck: healthConfig,
 		Timeouts: config.TimeoutsConfig{
 			ConnectTimeoutMs:   200,
 			ResponseTimeoutMs:  1000,
@@ -441,5 +423,50 @@ func TestProxyHandlerRetriesIdempotentRequestOnAlternateBackend(t *testing.T) {
 	body, _ := io.ReadAll(rec.Body)
 	if strings.TrimSpace(string(body)) != "healthy" {
 		t.Fatalf("body = %q, want %q", string(body), "healthy")
+	}
+}
+
+func TestProxyHandlerPassiveHealthDeactivatesFailingBackend(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer backend.Close()
+
+	healthConfig := testutil.DefaultHealthCheckConfig()
+	healthConfig.Passive.Enabled = true
+	healthConfig.Thresholds.Unhealthy = 1
+	fullConfig := &config.FullConfig{
+		Server:       config.ServerConfig{ProxyPort: 8080, AdminGrpcPort: 50051},
+		LoadBalancer: config.LoadBalancingConfig{Strategy: "least-connections"},
+		Backends: []*config.BackendConfig{
+			{Id: "backend", URL: backend.URL, Weight: 1, Enabled: true},
+		},
+		HealthCheck: healthConfig,
+		Timeouts: config.TimeoutsConfig{
+			ConnectTimeoutMs:   1000,
+			ResponseTimeoutMs:  1000,
+			KeepAliveTimeoutMs: 1000,
+			IdleConnTimeoutMs:  1000,
+		},
+		VirtualHosts: []config.VirtualHost{
+			{Domain: "app.local", BackendIDs: []string{"backend"}, SecurityPolicyID: "default"},
+		},
+	}
+	rt := newTestRuntime(t, fullConfig)
+
+	req := httptest.NewRequest(http.MethodGet, "http://app.local/", nil)
+	req.Host = "app.local"
+	rec := httptest.NewRecorder()
+	ProxyHandler(rt).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+	status, ok := rt.State().BackendStatus("backend")
+	if !ok {
+		t.Fatal("missing backend status")
+	}
+	if status.IsActive() {
+		t.Fatal("passive health did not deactivate failing backend")
 	}
 }
