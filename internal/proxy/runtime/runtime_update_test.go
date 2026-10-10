@@ -1,10 +1,10 @@
 package runtime
 
 import (
-	"edge-proxy/internal/config"
-	"edge-proxy/internal/testutil"
 	"encoding/json"
 	"fmt"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/testutil"
 	"os"
 	"path/filepath"
 	"sync"

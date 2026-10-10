@@ -55,6 +55,9 @@ func (v DefaultValidator) Validate(cfg *FullConfig) error {
 		if backend.URL == "" {
 			return fmt.Errorf("backend URL cannot be empty")
 		}
+		if strings.HasPrefix(backend.URL, "env:") {
+			return fmt.Errorf("backend %s URL uses an unsupported env placeholder; use a concrete URL", backend.Id)
+		}
 
 		parsed, err := url.Parse(backend.URL)
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {

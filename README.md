@@ -4,14 +4,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Project status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)](#project-status)
 
-Edge Proxy is an experimental, runtime-configurable reverse proxy and edge
-gateway written in Go. It routes HTTP traffic by host and path, tracks backend
-health, applies per-virtual-host rate limiting, exposes Prometheus metrics, and
-accepts authenticated runtime configuration updates.
-
-The project is currently pre-alpha. It is useful for local experiments,
-education, benchmarking, and architecture work, but it has not completed a
-security audit and should not be treated as a production security boundary.
+Edge Proxy is a runtime-configurable reverse proxy and edge gateway written in
+Go. It routes HTTP traffic by host and path, tracks backend health, applies
+per-virtual-host rate limiting, exposes Prometheus metrics, and accepts
+authenticated runtime configuration updates. It is developed as an open-source
+learning project for exploring HTTP proxy internals and edge infrastructure.
 
 ## What Edge Proxy Does Today
 
@@ -76,7 +73,7 @@ internal/
 
 Requirements:
 
-- Go 1.25 or newer, matching `go.mod`;
+- Go 1.25.2 or newer, matching `go.mod`;
 - Docker and Docker Compose for the complete local stack.
 
 Create a local environment file:
@@ -114,22 +111,36 @@ the configured healthy threshold.
 The default configuration is stored in `configs/config.json`. Additional
 examples are available in `configs/examples/`.
 
-Values prefixed with `env:` are resolved from environment variables:
+Proxy configuration uses concrete, non-secret values. In Docker Compose,
+backend URLs can use service names from the shared Docker network:
 
 ```json
 {
-  "url": "env:BACKEND1_URL",
+  "id": "backend-1",
+  "url": "http://backend-a:3000",
   "weight": 1,
   "enabled": true
 }
 ```
+
+Use a separate configuration file for each environment when backend addresses
+or routing rules differ. When running the binary directly, `CONFIG_PATH`
+selects the file loaded by the proxy. In a container, mount the selected file
+and set `CONFIG_PATH` to its path. Runtime changes made through the Admin API
+are persisted as concrete values to that file.
+
+Environment variables remain available for secrets and process-level startup
+settings. They are not expanded inside the JSON configuration. The local
+`.env` file is used by Docker Compose for values such as admin tokens and the
+Grafana password, `.env.example` documents settings intended to be customized
+for the local stack.
 
 Important fields:
 
 | Field | Purpose |
 | --- | --- |
 | `server.proxy_port` | Public proxy HTTP port |
-| `server.admin_grpc_port` | Internal admin gRPC port |
+| `server.admin_grpc_port` | Persisted admin gRPC port setting; the listener currently uses `ADMIN_GRPC_ADDR` |
 | `load_balancing.strategy` | Load-balancing strategy: `least-connections` or experimental `adaptive` |
 | `backends` | Upstream backend definitions with stable `id` values |
 | `virtual_hosts` | Host-based routing policies using `backend_ids` |
@@ -164,14 +175,6 @@ Path routes are matched as exact paths or slash-delimited subtrees. For example,
 `/api` matches `/api` and `/api/users`, but not `/apix`. When multiple routes
 match, the longest route wins. `strip_prefix` is applied only after a route has
 matched.
-
-Two operational caveats are worth keeping in mind while the project is
-pre-alpha:
-
-- `env:` placeholders are resolved when the runtime loads configuration.
-  Runtime updates currently persist resolved values back to the JSON file.
-- Updating `server.proxy_port` or `server.admin_grpc_port` changes persisted
-  configuration, but live listeners are not restarted yet.
 
 ## Admin API
 
@@ -243,17 +246,19 @@ go test ./...
 go test -race ./...
 ```
 
-Run the proxy outside Docker:
+Run the proxy outside Docker with a configuration whose backend URLs are
+reachable from the host:
 
 ```bash
-go run ./cmd/reverse-proxy
+ADMIN_GRPC_TOKEN=development-only \
+  CONFIG_PATH=/path/to/config.json \
+  go run ./cmd/reverse-proxy
 ```
 
 ## Project Status
 
-Edge Proxy is **pre-alpha**. It is suitable for local experiments, education,
-benchmarking, and collaborative development. It has not completed a security
-audit and should not be presented as a production-ready security boundary.
+Edge Proxy is **pre-alpha** and under active development. Configuration formats
+and APIs may change before the first stable release.
 
 The project originated from an engineering thesis. The current repository is a
 substantial refactor with a consolidated Go module, immutable configuration
@@ -264,13 +269,16 @@ authenticated control plane.
 
 - Admin gRPC authentication uses bearer tokens, but the transport is plaintext.
   Keep it on a trusted private network.
-- Runtime configuration saves currently persist resolved `env:` values instead
-  of preserving the original placeholders.
-- Updating `server.proxy_port` or `server.admin_grpc_port` persists the new
-  value, but running listeners are not restarted.
+- The public proxy listener serves plain HTTP; TLS termination is not
+  implemented yet.
+- Updating `server.proxy_port` persists the new value, but does not restart the
+  listener. `server.admin_grpc_port` does not currently configure the live
+  listener, which is controlled by `ADMIN_GRPC_ADDR`.
 - Newly added or freshly started backends may return 503 until health checks
   mark them active.
 - The adaptive load balancer is implemented but still experimental.
+- HTTP upgrades, trailers, and complete hop-by-hop header filtering are not yet
+  supported.
 - Request size, URL length, and header limits are not yet configurable per
   virtual host.
 

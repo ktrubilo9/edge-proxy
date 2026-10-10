@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"edge-proxy/internal/config"
-	"edge-proxy/internal/proxy/runtime"
-	"edge-proxy/internal/testutil"
 	"encoding/json"
 	"errors"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
+	"github.com/ktrubilo9/edge-proxy/internal/testutil"
 	"io"
 	"net/http"
 	"net/http/httptest"

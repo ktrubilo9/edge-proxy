@@ -26,22 +26,8 @@ func LoadConfig(path string) (*FullConfig, error) {
 		return nil, err
 	}
 
-	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
-	}
-
-	// Resolve placeholders before validation so runtime code has one concrete
-	// configuration shape. Consequently, a later SaveConfig writes resolved
-	// values rather than the original env: expressions.
-	resolved := ResolveEnvVars(raw)
-	resolvedData, err := json.Marshal(resolved)
-	if err != nil {
-		return nil, err
-	}
-
 	var fullConfig FullConfig
-	if err := json.Unmarshal(resolvedData, &fullConfig); err != nil {
+	if err := json.Unmarshal(data, &fullConfig); err != nil {
 		return nil, err
 	}
 

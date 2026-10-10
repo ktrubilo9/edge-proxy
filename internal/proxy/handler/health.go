@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"edge-proxy/internal/health"
-	"edge-proxy/internal/logger"
-	"edge-proxy/internal/proxy/runtime"
 	"encoding/json"
+	"github.com/ktrubilo9/edge-proxy/internal/health"
+	"github.com/ktrubilo9/edge-proxy/internal/logger"
+	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
 	"net/http"
 )
 

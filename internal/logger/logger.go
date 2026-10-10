@@ -2,8 +2,8 @@ package logger
 
 import (
 	"bufio"
-	"edge-proxy/internal/config"
 	"fmt"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
 	"io"
 	"os"
 

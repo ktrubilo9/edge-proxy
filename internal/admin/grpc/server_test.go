@@ -1,7 +1,7 @@
 package grpc
 
 import (
-	"edge-proxy/internal/proxy/runtime"
+	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
 	"testing"
 )
 

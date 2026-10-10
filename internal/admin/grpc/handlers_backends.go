@@ -2,8 +2,8 @@ package grpc
 
 import (
 	"context"
-	"edge-proxy/internal/api/adminpb"
-	"edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

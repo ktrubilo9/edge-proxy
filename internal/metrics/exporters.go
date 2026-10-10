@@ -1,7 +1,7 @@
 package metrics
 
 import (
-	"edge-proxy/internal/view"
+	"github.com/ktrubilo9/edge-proxy/internal/view"
 	"sync/atomic"
 	"time"
 )

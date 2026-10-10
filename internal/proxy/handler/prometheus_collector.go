@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"edge-proxy/internal/proxy/runtime"
+	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
 	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"

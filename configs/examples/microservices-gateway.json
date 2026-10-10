@@ -7,14 +7,14 @@
     "strategy": "least-connections"
   },
   "backends": [
-    { "id": "frontend-1", "url": "env:FRONTEND_1_URL", "weight": 1, "enabled": true },
-    { "id": "frontend-2", "url": "env:FRONTEND_2_URL", "weight": 1, "enabled": true },
-    { "id": "users-1", "url": "env:USERS_1_URL", "weight": 2, "enabled": true },
-    { "id": "users-2", "url": "env:USERS_2_URL", "weight": 2, "enabled": true },
-    { "id": "orders-1", "url": "env:ORDERS_1_URL", "weight": 2, "enabled": true },
-    { "id": "orders-2", "url": "env:ORDERS_2_URL", "weight": 2, "enabled": true },
-    { "id": "payments-1", "url": "env:PAYMENTS_1_URL", "weight": 1, "enabled": true },
-    { "id": "payments-2", "url": "env:PAYMENTS_2_URL", "weight": 1, "enabled": true }
+    { "id": "frontend-1", "url": "http://frontend-1:8080", "weight": 1, "enabled": true },
+    { "id": "frontend-2", "url": "http://frontend-2:8080", "weight": 1, "enabled": true },
+    { "id": "users-1", "url": "http://users-1:8080", "weight": 2, "enabled": true },
+    { "id": "users-2", "url": "http://users-2:8080", "weight": 2, "enabled": true },
+    { "id": "orders-1", "url": "http://orders-1:8080", "weight": 2, "enabled": true },
+    { "id": "orders-2", "url": "http://orders-2:8080", "weight": 2, "enabled": true },
+    { "id": "payments-1", "url": "http://payments-1:8080", "weight": 1, "enabled": true },
+    { "id": "payments-2", "url": "http://payments-2:8080", "weight": 1, "enabled": true }
   ],
   "health_check": {
     "enabled": true,

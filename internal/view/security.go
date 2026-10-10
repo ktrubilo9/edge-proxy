@@ -1,6 +1,6 @@
 package view
 
-import "edge-proxy/internal/config"
+import "github.com/ktrubilo9/edge-proxy/internal/config"
 
 type SecurityConfigResponse struct {
 	RateLimiting config.RateLimitingConfig `json:"rate_limiting"`

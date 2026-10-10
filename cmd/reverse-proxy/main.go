@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"edge-proxy/internal/proxy"
 	"errors"
+	"github.com/ktrubilo9/edge-proxy/internal/proxy"
 	"log"
 	"os"
 	"os/signal"

@@ -7,11 +7,11 @@
     "strategy": "least-connections"
   },
   "backends": [
-    { "id": "frontend-1", "url": "env:APP_FRONTEND_1_URL", "weight": 1, "enabled": true },
-    { "id": "frontend-2", "url": "env:APP_FRONTEND_2_URL", "weight": 1, "enabled": true },
-    { "id": "api-1", "url": "env:APP_API_1_URL", "weight": 2, "enabled": true },
-    { "id": "api-2", "url": "env:APP_API_2_URL", "weight": 2, "enabled": true },
-    { "id": "admin-1", "url": "env:APP_ADMIN_1_URL", "weight": 1, "enabled": true }
+    { "id": "frontend-1", "url": "http://frontend-1:8080", "weight": 1, "enabled": true },
+    { "id": "frontend-2", "url": "http://frontend-2:8080", "weight": 1, "enabled": true },
+    { "id": "api-1", "url": "http://api-1:8080", "weight": 2, "enabled": true },
+    { "id": "api-2", "url": "http://api-2:8080", "weight": 2, "enabled": true },
+    { "id": "admin-1", "url": "http://admin-1:8080", "weight": 1, "enabled": true }
   ],
   "health_check": {
     "enabled": true,

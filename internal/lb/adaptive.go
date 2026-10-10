@@ -5,8 +5,8 @@ import (
 	"math/rand/v2"
 	"sync/atomic"
 
-	"edge-proxy/internal/config"
-	"edge-proxy/internal/metrics"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/metrics"
 )
 
 // AdaptiveLB implements a load balancer that scores backends using

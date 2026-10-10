@@ -2,7 +2,7 @@ package health
 
 import (
 	"context"
-	"edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
 	"net/http"
 	"net/http/httptest"
 	"testing"

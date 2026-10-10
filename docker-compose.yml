@@ -9,8 +9,6 @@ services:
       - backend-a
       - backend-b
     environment:
-      - BACKEND1_URL=http://backend-a:3000
-      - BACKEND2_URL=http://backend-b:3000
       - ADMIN_GRPC_ADDR=0.0.0.0:50051
       - ADMIN_GRPC_TOKEN=${ADMIN_GRPC_TOKEN:?ADMIN_GRPC_TOKEN must be set}
       - OPS_ADDR=0.0.0.0:9091
