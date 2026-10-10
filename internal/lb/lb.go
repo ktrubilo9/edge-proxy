@@ -1,10 +1,10 @@
 package lb
 
 import (
-	"edge-proxy/internal/config"
-	"edge-proxy/internal/logger"
-	"edge-proxy/internal/metrics"
 	"errors"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/logger"
+	"github.com/ktrubilo9/edge-proxy/internal/metrics"
 )
 
 type LoadBalancer interface {

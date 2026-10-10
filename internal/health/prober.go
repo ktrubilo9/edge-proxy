@@ -2,9 +2,9 @@ package health
 
 import (
 	"context"
-	"edge-proxy/internal/config"
 	"errors"
 	"fmt"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
 	"io"
 	"net"
 	"net/http"

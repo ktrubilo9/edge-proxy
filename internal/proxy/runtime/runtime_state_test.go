@@ -1,8 +1,8 @@
 package runtime
 
 import (
-	"edge-proxy/internal/config"
-	"edge-proxy/internal/metrics"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/metrics"
 	"net/http"
 	"strings"
 	"testing"

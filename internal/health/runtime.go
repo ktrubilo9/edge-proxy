@@ -1,8 +1,8 @@
 package health
 
 import (
-	"edge-proxy/internal/config"
-	"edge-proxy/internal/proxy/runtime"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
 )
 
 type HealthRuntime interface {

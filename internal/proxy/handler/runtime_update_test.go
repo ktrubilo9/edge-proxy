@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"edge-proxy/internal/config"
-	"edge-proxy/internal/testutil"
 	"fmt"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/testutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"

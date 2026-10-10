@@ -1,9 +1,9 @@
 package main
 
 import (
-	"edge-proxy/internal/admin"
-	"edge-proxy/internal/admin/handler"
-	"edge-proxy/internal/api/adminpb"
+	"github.com/ktrubilo9/edge-proxy/internal/admin"
+	"github.com/ktrubilo9/edge-proxy/internal/admin/handler"
+	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
 	"log"
 	"net/http"
 	"os"

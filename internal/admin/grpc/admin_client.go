@@ -1,9 +1,9 @@
 package grpc
 
 import (
-	"edge-proxy/internal/admin"
-	"edge-proxy/internal/api/adminpb"
 	"errors"
+	"github.com/ktrubilo9/edge-proxy/internal/admin"
+	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
 	"log"
 	"os"
 

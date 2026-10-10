@@ -1,4 +1,4 @@
-module edge-proxy
+module github.com/ktrubilo9/edge-proxy
 
 go 1.25.2
 

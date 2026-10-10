@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"edge-proxy/internal/config"
-	"edge-proxy/internal/health"
-	runtimepkg "edge-proxy/internal/proxy/runtime"
-	"edge-proxy/internal/testutil"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/health"
+	runtimepkg "github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
+	"github.com/ktrubilo9/edge-proxy/internal/testutil"
 )
 
 func TestAddEnabledBackendTriggersImmediateHealthCheckAndActivatesHealthyBackend(t *testing.T) {

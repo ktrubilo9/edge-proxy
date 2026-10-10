@@ -2,11 +2,11 @@ package health
 
 import (
 	"context"
-	"edge-proxy/internal/config"
-	"edge-proxy/internal/logger"
-	"edge-proxy/internal/metrics"
-	"edge-proxy/internal/proxy/runtime"
 	"errors"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/logger"
+	"github.com/ktrubilo9/edge-proxy/internal/metrics"
+	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
 	"sync"
 	"time"
 )

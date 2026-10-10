@@ -1,9 +1,9 @@
 package middleware
 
 import (
-	"edge-proxy/internal/logger"
-	"edge-proxy/internal/proxy/runtime"
-	"edge-proxy/internal/ratelimit"
+	"github.com/ktrubilo9/edge-proxy/internal/logger"
+	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
+	"github.com/ktrubilo9/edge-proxy/internal/ratelimit"
 	"net/http"
 
 	"strconv"

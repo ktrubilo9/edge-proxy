@@ -2,8 +2,8 @@ package handler
 
 import (
 	"context"
-	"edge-proxy/internal/api/adminpb"
 	"encoding/json"
+	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
 	"net/http"
 	"time"
 )

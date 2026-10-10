@@ -1,6 +1,6 @@
 package testutil
 
-import "edge-proxy/internal/config"
+import "github.com/ktrubilo9/edge-proxy/internal/config"
 
 func DefaultHealthCheckConfig() config.HealthCheckConfig {
 	return DefaultHealthCheckConfigWithInterval(1000)

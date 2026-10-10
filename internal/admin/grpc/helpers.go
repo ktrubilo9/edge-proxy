@@ -1,10 +1,10 @@
 package grpc
 
 import (
-	"edge-proxy/internal/api/adminpb"
-	"edge-proxy/internal/config"
-	"edge-proxy/internal/proxy/runtime"
-	"edge-proxy/internal/view"
+	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
+	"github.com/ktrubilo9/edge-proxy/internal/view"
 )
 
 type AdminGRPCServer struct {

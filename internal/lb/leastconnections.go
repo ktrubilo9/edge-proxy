@@ -1,8 +1,8 @@
 package lb
 
 import (
-	"edge-proxy/internal/config"
-	"edge-proxy/internal/metrics"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/metrics"
 	"sync/atomic"
 )
 

@@ -1,11 +1,11 @@
 package runtime
 
 import (
-	"edge-proxy/internal/config"
-	"edge-proxy/internal/lb"
-	"edge-proxy/internal/logger"
-	"edge-proxy/internal/metrics"
-	"edge-proxy/internal/view"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/lb"
+	"github.com/ktrubilo9/edge-proxy/internal/logger"
+	"github.com/ktrubilo9/edge-proxy/internal/metrics"
+	"github.com/ktrubilo9/edge-proxy/internal/view"
 	"net"
 	"net/http"
 	"sync"

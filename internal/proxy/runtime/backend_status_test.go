@@ -1,8 +1,8 @@
 package runtime
 
 import (
-	"edge-proxy/internal/config"
 	"errors"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
 	"testing"
 	"time"
 )

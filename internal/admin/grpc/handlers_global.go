@@ -2,7 +2,7 @@ package grpc
 
 import (
 	"context"
-	"edge-proxy/internal/api/adminpb"
+	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
 )
 
 func (s *AdminGRPCServer) GetServerConfig(ctx context.Context, _ *adminpb.Empty) (*adminpb.ServerConfig, error) {

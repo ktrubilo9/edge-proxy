@@ -1,8 +1,9 @@
 package runtime
 
 import (
-	"edge-proxy/internal/config"
 	"sync"
+
+	"github.com/ktrubilo9/edge-proxy/internal/config"
 )
 
 type BackendRegistry struct {

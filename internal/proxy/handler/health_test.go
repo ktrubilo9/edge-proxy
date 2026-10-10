@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"edge-proxy/internal/config"
-	healthview "edge-proxy/internal/health"
-	"edge-proxy/internal/testutil"
 	"encoding/json"
 	"errors"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	healthview "github.com/ktrubilo9/edge-proxy/internal/health"
+	"github.com/ktrubilo9/edge-proxy/internal/testutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
