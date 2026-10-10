@@ -1,8 +1,5 @@
 # Security
 
-Edge Proxy is currently experimental and has not completed an independent
-security audit. Do not treat it as a production-ready security boundary.
-
 Do not report suspected vulnerabilities in a public issue. Use GitHub's private
 vulnerability reporting:
 
