@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ktrubilo9/edge-proxy/internal/config"
 	"io"
 	"net"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/ktrubilo9/edge-proxy/internal/config"
 )
 
 type Prober interface {
@@ -95,7 +96,9 @@ func (pr *HTTPProber) Probe(
 		}
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	// Draining a small health response lets the transport reuse its connection.
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4<<10))
 

@@ -131,7 +131,7 @@ func (l *AsyncLogger) formatEntry(entry LogEntry) string {
 
 	sb.WriteString(" |")
 	for k, v := range entry.Fields {
-		sb.WriteString(fmt.Sprintf(" %s=%v", k, v))
+		_, _ = fmt.Fprintf(&sb, " %s=%v", k, v)
 	}
 	return sb.String()
 }

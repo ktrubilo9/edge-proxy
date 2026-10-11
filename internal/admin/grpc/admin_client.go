@@ -2,10 +2,11 @@ package grpc
 
 import (
 	"errors"
-	"github.com/ktrubilo9/edge-proxy/internal/admin"
-	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
 	"log"
 	"os"
+
+	"github.com/ktrubilo9/edge-proxy/internal/admin"
+	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -41,8 +42,9 @@ func ConnectToAdminAPI(address string) (*AdminClient, error) {
 	}, nil
 }
 
-func (a *AdminClient) Close() {
-	if a.conn != nil {
-		a.conn.Close()
+func (a *AdminClient) Close() error {
+	if a.conn == nil {
+		return nil
 	}
+	return a.conn.Close()
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -69,16 +70,22 @@ func MemoryPercent() float32 {
 	return float32((total - available) / total * 100)
 }
 
+func writeResponse(w http.ResponseWriter, format string, args ...interface{}) {
+	if _, err := fmt.Fprintf(w, format, args...); err != nil {
+		log.Printf("Failed to write response: %v", err)
+	}
+}
+
 func main() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, serverID)
+		writeResponse(w, "%s\n", serverID)
 	})
 
 	// Used by the proxy health checker.
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "ok")
+		writeResponse(w, "ok\n")
 	})
 
 	// Used by the proxy to collect backend resource metrics.
@@ -90,7 +97,9 @@ func main() {
 			MemoryPercent: mem,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(metrics)
+		if err := json.NewEncoder(w).Encode(metrics); err != nil {
+			log.Printf("Failed to encode metrics response: %v", err)
+		}
 	})
 
 	http.HandleFunc("/api/admin/cpu", func(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +125,7 @@ func main() {
 			}(stop)
 		}
 
-		fmt.Fprintf(w, "Started %d CPU workers\n", count)
+		writeResponse(w, "Started %d CPU workers\n", count)
 	})
 
 	http.HandleFunc("/api/admin/cpu/stop", func(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +133,7 @@ func main() {
 			close(ch)
 		}
 		cpuWorkers = nil
-		fmt.Fprintln(w, "Stopped all CPU workers")
+		writeResponse(w, "Stopped all CPU workers\n")
 	})
 
 	http.HandleFunc("/api/admin/memory", func(w http.ResponseWriter, r *http.Request) {
@@ -141,13 +150,13 @@ func main() {
 
 		memoryHog = append(memoryHog, block)
 
-		fmt.Fprintf(w, "Allocated %d MB memory\n", mb)
+		writeResponse(w, "Allocated %d MB memory\n", mb)
 	})
 
 	http.HandleFunc("/api/admin/memory/clear", func(w http.ResponseWriter, r *http.Request) {
 		memoryHog = nil
 		runtime.GC()
-		fmt.Fprintln(w, "Cleared allocated memory")
+		writeResponse(w, "Cleared allocated memory\n")
 	})
 
 	http.HandleFunc("/delay", func(w http.ResponseWriter, r *http.Request) {
@@ -160,8 +169,10 @@ func main() {
 			seconds = 1
 		}
 		time.Sleep(time.Duration(seconds) * time.Second)
-		fmt.Fprintln(w, serverID)
+		writeResponse(w, "%s\n", serverID)
 	})
 
-	http.ListenAndServe(":3000", nil)
+	if err := http.ListenAndServe(":3000", nil); err != nil {
+		log.Fatalf("Mock backend server failed: %v", err)
+	}
 }

@@ -3,6 +3,15 @@ package proxy
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/ktrubilo9/edge-proxy/internal/admin/grpc"
 	"github.com/ktrubilo9/edge-proxy/internal/config"
 	"github.com/ktrubilo9/edge-proxy/internal/health"
@@ -11,14 +20,6 @@ import (
 	"github.com/ktrubilo9/edge-proxy/internal/middleware"
 	"github.com/ktrubilo9/edge-proxy/internal/proxy/handler"
 	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
-	"log"
-	"net"
-	"net/http"
-	"os"
-	"sync"
-	"time"
-
-	"strconv"
 
 	grpcpkg "google.golang.org/grpc"
 )
@@ -105,8 +106,11 @@ func (p *Proxy) Start() error {
 	}
 	opsListener, err := net.Listen("tcp", opsAddr)
 	if err != nil {
-		adminListener.Close()
+		closeErr := adminListener.Close()
 		adminGRPCServer.Stop()
+		if closeErr != nil {
+			return errors.Join(err, fmt.Errorf("close admin listener: %w", closeErr))
+		}
 		return err
 	}
 	p.opsListener = opsListener

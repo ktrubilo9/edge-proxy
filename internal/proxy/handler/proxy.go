@@ -149,7 +149,6 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 			}
 			if netErr, ok := err.(net.Error); ok {
 				fields["timeout"] = netErr.Timeout()
-				fields["temporary"] = netErr.Temporary()
 				if backend != nil && netErr.Timeout() {
 					state.Metrics.RecordTimeout(backend.URL)
 				}
@@ -160,7 +159,9 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 			logAndReturn(statusCode, responseMessage, "", fields, err)
 			return
 		}
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 		state.Metrics.HTTP.RecordStatusCode(resp.StatusCode)
 
 		for k, v := range resp.Header {

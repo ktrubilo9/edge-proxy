@@ -2,9 +2,10 @@ package handler
 
 import (
 	"encoding/json"
+	"net/http"
+
 	"github.com/ktrubilo9/edge-proxy/internal/logger"
 	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
-	"net/http"
 )
 
 func MetricsHandler(rt *runtime.Runtime) http.HandlerFunc {
@@ -22,6 +23,11 @@ func MetricsHandler(rt *runtime.Runtime) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			logger.Warn("Failed to encode metrics response", map[string]interface{}{
+				"error":       err.Error(),
+				"remote_addr": r.RemoteAddr,
+			})
+		}
 	}
 }
