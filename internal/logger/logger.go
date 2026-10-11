@@ -3,14 +3,14 @@ package logger
 import (
 	"bufio"
 	"fmt"
-	"github.com/ktrubilo9/edge-proxy/internal/config"
 	"io"
 	"os"
-
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ktrubilo9/edge-proxy/internal/config"
 )
 
 type LogLevel int
@@ -23,14 +23,16 @@ type LogEntry struct {
 }
 
 type AsyncLogger struct {
-	configPtr atomic.Pointer[config.LoggingConfig]
-	level     atomic.Int32
-	writer    io.Writer
-	entryChan chan LogEntry
-	wg        sync.WaitGroup
-	done      chan struct{}
-	mu        sync.Mutex
-	dropped   uint64
+	configPtr      atomic.Pointer[config.LoggingConfig]
+	level          atomic.Int32
+	writer         io.Writer
+	errorOut       io.Writer
+	entryChan      chan LogEntry
+	wg             sync.WaitGroup
+	done           chan struct{}
+	mu             sync.Mutex
+	dropped        uint64
+	writeErrorOnce sync.Once
 }
 
 const (
@@ -50,6 +52,7 @@ func Init(config *config.LoggingConfig) error {
 	once.Do(func() {
 		instance = &AsyncLogger{
 			writer:    os.Stdout,
+			errorOut:  os.Stderr,
 			entryChan: make(chan LogEntry, config.BufferSize),
 			done:      make(chan struct{}),
 		}
@@ -162,7 +165,7 @@ func (l *AsyncLogger) process() {
 	defer l.wg.Done()
 
 	writer := bufio.NewWriter(l.writer)
-	defer writer.Flush()
+	defer l.flush(writer, "final flush")
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -171,27 +174,60 @@ func (l *AsyncLogger) process() {
 		select {
 		case entry := <-l.entryChan:
 			formatted := l.formatEntry(entry)
-			writer.WriteString(formatted)
-			writer.WriteByte('\n')
+			if _, err := writer.WriteString(formatted); err != nil {
+				l.reportWriterError("write log entry", err)
+				continue
+			}
+			if err := writer.WriteByte('\n'); err != nil {
+				l.reportWriterError("write log entry separator", err)
+				continue
+			}
 
 			if writer.Buffered() > 4096 {
-				writer.Flush()
+				l.flush(writer, "flush full buffer")
 			}
 		case <-ticker.C:
-			writer.Flush()
+			l.flush(writer, "periodic flush")
 			cfg := l.configPtr.Load()
 			if cfg.Enabled {
 				if dropped := atomic.SwapUint64(&l.dropped, 0); dropped > 0 {
-					writer.WriteString(fmt.Sprintf("%s [WARN] %d log entries dropped (buffer full)\n", time.Now().Format(time.RFC3339Nano), dropped))
+					if _, err := fmt.Fprintf(writer, "%s [WARN] %d log entries dropped (buffer full)\n", time.Now().Format(time.RFC3339Nano), dropped); err != nil {
+						l.reportWriterError("write dropped-entry warning", err)
+					}
 				}
 			} else {
 				atomic.SwapUint64(&l.dropped, 0)
 			}
 		case <-l.done:
-			writer.Flush()
 			return
 		}
 	}
+}
+
+func (l *AsyncLogger) flush(writer *bufio.Writer, operation string) {
+	if err := writer.Flush(); err != nil {
+		l.reportWriterError(operation, err)
+	}
+}
+
+func (l *AsyncLogger) reportWriterError(operation string, err error) {
+	if err == nil {
+		return
+	}
+
+	l.writeErrorOnce.Do(func() {
+		errorOut := l.errorOut
+		if errorOut == nil {
+			errorOut = os.Stderr
+		}
+		_, _ = fmt.Fprintf(
+			errorOut,
+			"%s [ERROR] logger output failed operation=%q error=%q\n",
+			time.Now().Format(time.RFC3339Nano),
+			operation,
+			err,
+		)
+	})
 }
 
 func (l *AsyncLogger) writeEntry(entry LogEntry) {
@@ -199,7 +235,9 @@ func (l *AsyncLogger) writeEntry(entry LogEntry) {
 	defer l.mu.Unlock()
 
 	formatted := l.formatEntry(entry)
-	fmt.Fprintln(l.writer, formatted)
+	if _, err := fmt.Fprintln(l.writer, formatted); err != nil {
+		l.reportWriterError("write log entry", err)
+	}
 }
 
 func LogRequest(start time.Time, clientIP, method, path string, status int, backend string, duration time.Duration, errStr string, fields map[string]interface{}) {
@@ -303,5 +341,7 @@ func Stop() {
 	close(instance.done)
 	instance.wg.Wait()
 
-	fmt.Fprintln(os.Stdout, time.Now().Format(time.RFC3339Nano)+" [INFO] Logger stopped")
+	if _, err := fmt.Fprintln(os.Stdout, time.Now().Format(time.RFC3339Nano)+" [INFO] Logger stopped"); err != nil {
+		instance.reportWriterError("write shutdown confirmation", err)
+	}
 }
