@@ -20,7 +20,7 @@ func (lc *LeastConnections) Next(backends []*config.BackendConfig) (*config.Back
 	}
 
 	var best *config.BackendConfig
-	minConnections := uint64(1<<31 - 1)
+	var minConnections uint64
 	for _, b := range backends {
 		if !b.Enabled {
 			continue
@@ -31,11 +31,14 @@ func (lc *LeastConnections) Next(backends []*config.BackendConfig) (*config.Back
 		}
 
 		currentConns := atomic.LoadUint64(&bm.ActiveConnections)
-		if currentConns < minConnections {
+		if best == nil || currentConns < minConnections {
 			minConnections = currentConns
 			best = b
 		}
 	}
 
+	if best == nil {
+		return nil, ErrNoAvailableBackend
+	}
 	return best, nil
 }
