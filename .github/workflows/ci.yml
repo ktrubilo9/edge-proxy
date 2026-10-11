@@ -10,6 +10,25 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.13
+
   test:
     name: Go checks
     runs-on: ubuntu-latest
@@ -37,7 +56,7 @@ jobs:
         run: go test -race ./...
   e2e:
     name: Health checker E2E
-    needs: test
+    needs: [lint, test]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
 
