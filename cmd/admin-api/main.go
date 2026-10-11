@@ -1,14 +1,15 @@
 package main
 
 import (
-	"github.com/ktrubilo9/edge-proxy/internal/admin"
-	"github.com/ktrubilo9/edge-proxy/internal/admin/handler"
-	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/ktrubilo9/edge-proxy/internal/admin"
+	"github.com/ktrubilo9/edge-proxy/internal/admin/handler"
+	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -47,7 +48,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to proxy admin server: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if closeErr := conn.Close(); closeErr != nil {
+			log.Printf("Failed to close proxy admin connection: %v", closeErr)
+		}
+	}()
 
 	proxyClient := adminpb.NewProxyAdminClient(conn)
 

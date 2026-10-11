@@ -1,8 +1,9 @@
 package grpc
 
 import (
-	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
 	"testing"
+
+	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
 )
 
 func TestNewAdminGRPCServerRequiresToken(t *testing.T) {
@@ -26,6 +27,10 @@ func TestNewAdminGRPCServerCreatesAuthenticatedServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAdminGRPCServer returned error: %v", err)
 	}
-	defer listener.Close()
+	t.Cleanup(func() {
+		if closeErr := listener.Close(); closeErr != nil {
+			t.Errorf("close admin listener: %v", closeErr)
+		}
+	})
 	server.Stop()
 }

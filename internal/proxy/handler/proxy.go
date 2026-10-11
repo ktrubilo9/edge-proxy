@@ -4,18 +4,20 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"github.com/ktrubilo9/edge-proxy/internal/config"
-	"github.com/ktrubilo9/edge-proxy/internal/logger"
-	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
-
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/lb"
+	"github.com/ktrubilo9/edge-proxy/internal/logger"
+	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
 )
 
 func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
@@ -134,14 +136,19 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 
 		if err != nil {
 			statusCode := http.StatusBadGateway
-			fields["error_type"] = "http_client_do"
+			responseMessage := "Backend error"
+			fields["error_type"] = "upstream_request"
+			if errors.Is(err, lb.ErrNoAvailableBackend) {
+				statusCode = http.StatusServiceUnavailable
+				responseMessage = "No available backend"
+				fields["error_type"] = "backend_selection"
+			}
 			fields["error_details"] = err.Error()
 			if backend != nil {
 				fields["attempted_backend"] = backend.URL
 			}
 			if netErr, ok := err.(net.Error); ok {
 				fields["timeout"] = netErr.Timeout()
-				fields["temporary"] = netErr.Temporary()
 				if backend != nil && netErr.Timeout() {
 					state.Metrics.RecordTimeout(backend.URL)
 				}
@@ -149,10 +156,12 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 			if backend != nil {
 				state.Metrics.RecordRequestEnd(backend.URL, float64(duration.Nanoseconds())/1e6, true, int32(statusCode))
 			}
-			logAndReturn(http.StatusBadGateway, "Backend error", "", fields, nil)
+			logAndReturn(statusCode, responseMessage, "", fields, err)
 			return
 		}
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 		state.Metrics.HTTP.RecordStatusCode(resp.StatusCode)
 
 		for k, v := range resp.Header {
@@ -236,10 +245,14 @@ func executeProxyRequest(
 	var lastBackend *config.BackendConfig
 
 	for attempt := 0; len(candidates) > 0; attempt++ {
-		// todo log err
 		backend, err := current.LoadBalancer.Next(candidates)
+		if err != nil {
+			return nil, lastBackend, fmt.Errorf("select backend: %w", err)
+		}
 		if backend == nil {
-			break
+			return nil, lastBackend, errors.New(
+				"load balancer returned nil backend without an error",
+			)
 		}
 		lastBackend = backend
 

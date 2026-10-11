@@ -44,7 +44,9 @@ func FetchMetrics(url string, timeout time.Duration) (*RemoteSystemMetrics, erro
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("status code %d", resp.StatusCode)

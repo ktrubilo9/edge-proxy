@@ -3,6 +3,7 @@ package docs_test
 import (
 	"fmt"
 	"go/ast"
+	"go/build"
 	"go/parser"
 	"go/token"
 	"os"
@@ -81,14 +82,33 @@ func registeredAdminRoutes(t *testing.T) map[string]struct{} {
 
 	directory := filepath.Join("..", "cmd", "admin-api")
 	fileSet := token.NewFileSet()
-	packages, err := parser.ParseDir(fileSet, directory, nil, parser.AllErrors)
+	entries, err := os.ReadDir(directory)
 	if err != nil {
-		t.Fatalf("parse admin API package: %v", err)
+		t.Fatalf("read admin API directory: %v", err)
 	}
 
 	packageFiles := make([]*ast.File, 0)
-	for _, parsedPackage := range packages {
-		packageFiles = append(packageFiles, mapsValues(parsedPackage.Files)...)
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".go" {
+			continue
+		}
+		matches, matchErr := build.Default.MatchFile(directory, entry.Name())
+		if matchErr != nil {
+			t.Fatalf("match admin API file %s: %v", entry.Name(), matchErr)
+		}
+		if !matches || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+
+		path := filepath.Join(directory, entry.Name())
+		file, parseErr := parser.ParseFile(fileSet, path, nil, parser.AllErrors)
+		if parseErr != nil {
+			t.Fatalf("parse admin API file %s: %v", path, parseErr)
+		}
+		packageFiles = append(packageFiles, file)
+	}
+	if len(packageFiles) == 0 {
+		t.Fatalf("no Go files found in admin API directory %s", directory)
 	}
 	constants := stringConstants(packageFiles)
 
@@ -185,14 +205,6 @@ func stringExpression(expression ast.Expr, constants map[string]string) (string,
 	default:
 		return "", false
 	}
-}
-
-func mapsValues[K comparable, V any](values map[K]V) []V {
-	result := make([]V, 0, len(values))
-	for _, value := range values {
-		result = append(result, value)
-	}
-	return result
 }
 
 func (item openAPIPathItem) operations() map[string]*openAPIOperation {
