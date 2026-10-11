@@ -3,20 +3,30 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"github.com/ktrubilo9/edge-proxy/internal/config"
-	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
-	"github.com/ktrubilo9/edge-proxy/internal/testutil"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"sync/atomic"
+	"github.com/ktrubilo9/edge-proxy/internal/config"
+	"github.com/ktrubilo9/edge-proxy/internal/lb"
+	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
+	"github.com/ktrubilo9/edge-proxy/internal/testutil"
 )
+
+type stubLoadBalancer struct {
+	backend *config.BackendConfig
+	err     error
+}
+
+func (s stubLoadBalancer) Next(_ []*config.BackendConfig) (*config.BackendConfig, error) {
+	return s.backend, s.err
+}
 
 func newTestRuntime(t *testing.T, fullConfig *config.FullConfig) *runtime.Runtime {
 	t.Helper()
@@ -111,6 +121,53 @@ func TestProxyHandlerUnknownHostReturnsForbidden(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestProxyHandlerHandlesLoadBalancerSelectionFailure(t *testing.T) {
+	tests := []struct {
+		name       string
+		balancer   stubLoadBalancer
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "no available backend",
+			balancer:   stubLoadBalancer{err: lb.ErrNoAvailableBackend},
+			wantStatus: http.StatusServiceUnavailable,
+			wantBody:   "No available backend",
+		},
+		{
+			name:       "nil backend without error",
+			balancer:   stubLoadBalancer{},
+			wantStatus: http.StatusBadGateway,
+			wantBody:   "Backend error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rt := newSingleRouteTestRuntime(
+				t,
+				"app.local",
+				"http://127.0.0.1:1",
+				nil,
+			)
+			rt.State().LoadBalancer = tt.balancer
+
+			req := httptest.NewRequest(http.MethodGet, "http://app.local/", nil)
+			req.Host = "app.local"
+			rec := httptest.NewRecorder()
+
+			ProxyHandler(rt).ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.wantStatus)
+			}
+			if body := strings.TrimSpace(rec.Body.String()); body != tt.wantBody {
+				t.Fatalf("body = %q, want %q", body, tt.wantBody)
+			}
+		})
 	}
 }
 
