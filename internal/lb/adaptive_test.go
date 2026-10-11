@@ -65,6 +65,53 @@ func TestAdaptiveLBNextSingleBackend(t *testing.T) {
 	}
 }
 
+func TestAdaptiveLBNextFallbackOnlyEnabledBackends(t *testing.T) {
+	enabled := &config.BackendConfig{URL: "http://enabled", Enabled: true}
+	otherEnabled := &config.BackendConfig{URL: "http://other-enabled", Enabled: true}
+	disabled := &config.BackendConfig{URL: "http://disabled", Enabled: false}
+	tests := []struct {
+		name     string
+		backends []*config.BackendConfig
+	}{
+		{"enabled first", []*config.BackendConfig{enabled, disabled}},
+		{"enabled last", []*config.BackendConfig{disabled, enabled}},
+		{"multiple enabled", []*config.BackendConfig{enabled, disabled, otherEnabled}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := metrics.NewMetrics()
+			// Metrics for a disabled backend must not bypass the fallback.
+			setupBackendMetrics(m, disabled.URL, 1, 0, 0, 0)
+			lb := NewAdaptiveLB(m)
+			for i := 0; i < 100; i++ {
+				backend, err := lb.Next(tt.backends)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if backend != enabled && backend != otherEnabled {
+					t.Fatalf("fallback selected a disabled or unknown backend: %v", backend)
+				}
+			}
+		})
+	}
+}
+
+func TestAdaptiveLBNextScoredBackendExcludesDisabled(t *testing.T) {
+	m := metrics.NewMetrics()
+	lb := NewAdaptiveLB(m)
+	enabled := &config.BackendConfig{URL: "http://enabled", Enabled: true}
+	disabled := &config.BackendConfig{URL: "http://disabled", Enabled: false}
+	setupBackendMetrics(m, enabled.URL, 100, 0.5, 10, 20)
+	setupBackendMetrics(m, disabled.URL, 1, 0, 0, 0)
+	backend, err := lb.Next([]*config.BackendConfig{disabled, enabled})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if backend != enabled {
+		t.Fatalf("expected the enabled scored backend, got %v", backend)
+	}
+}
+
 func TestAdaptiveLBNextPrefersHealthierBackend(t *testing.T) {
 	m := metrics.NewMetrics()
 	lb := NewAdaptiveLB(m)

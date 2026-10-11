@@ -59,19 +59,18 @@ func (alb *AdaptiveLB) Next(backends []*config.BackendConfig) (*config.BackendCo
 
 	scored := alb.scoreBackends(backends)
 	if len(scored) == 0 {
-		hasEnabled := false
+		enabled := make([]*config.BackendConfig, 0, len(backends))
 
 		for _, b := range backends {
 			if b.Enabled {
-				hasEnabled = true
-				break
+				enabled = append(enabled, b)
 			}
 		}
-		if !hasEnabled {
+		if len(enabled) == 0 {
 			return nil, ErrNoAvailableBackend
 		}
 		// backends enabled, but no metrics -> fallback random
-		return backends[rand.IntN(len(backends))], nil
+		return enabled[rand.IntN(len(enabled))], nil
 	}
 
 	return alb.softmaxPick(scored), nil
