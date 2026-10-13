@@ -175,6 +175,7 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 		}()
 		state.Metrics.HTTP.RecordStatusCode(resp.StatusCode)
 
+		removeHopByHopHeaders(resp.Header)
 		for k, v := range resp.Header {
 			for _, vv := range v {
 				w.Header().Add(k, vv)

@@ -413,6 +413,73 @@ func TestProxyHandlerFiltersHopByHopRequestHeaders(t *testing.T) {
 	}
 }
 
+func TestProxyHandlerFiltersHopByHopResponseHeaders(t *testing.T) {
+	rt := newSingleRouteTestRuntime(t, "app.local", "http://backend.internal:3000", nil)
+	rt.State().HTTPClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusCreated,
+			Header: http.Header{
+				"cOnNeCtIoN":          {"Keep-Alive, X-Backend-State", "X-Request-ID"},
+				"kEeP-aLiVe":          {"timeout=5"},
+				"Proxy-Authenticate":  {"Basic"},
+				"Proxy-Authorization": {"Basic credentials"},
+				"Proxy-Connection":    {"keep-alive"},
+				"Te":                  {"trailers"},
+				"Trailer":             {"X-Response-Trailer"},
+				"Transfer-Encoding":   {"chunked"},
+				"Upgrade":             {"websocket"},
+				"X-Backend-State":     {"temporary"},
+				"X-Request-ID":        {"backend-request-id"},
+				"X-End-To-End":        {"one", "two"},
+				"Set-Cookie":          {"first=1", "second=2"},
+			},
+			Body:    io.NopCloser(strings.NewReader("created")),
+			Trailer: http.Header{"X-Response-Trailer": {"checksum"}},
+			Request: req,
+		}, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "http://app.local/items", nil)
+	req.Host = "app.local"
+	req.Header.Set("X-Request-ID", "proxy-request-id")
+	rec := httptest.NewRecorder()
+
+	ProxyHandler(rt).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if body := strings.TrimSpace(rec.Body.String()); body != "created" {
+		t.Fatalf("body = %q, want created", body)
+	}
+	for _, name := range []string{
+		"Connection",
+		"Keep-Alive",
+		"Proxy-Authenticate",
+		"Proxy-Authorization",
+		"Proxy-Connection",
+		"TE",
+		"Trailer",
+		"Transfer-Encoding",
+		"Upgrade",
+		"X-Backend-State",
+		"X-Response-Trailer",
+	} {
+		if headerContains(rec.Header(), name) {
+			t.Errorf("downstream response contains hop-by-hop header %q: %v", name, rec.Header())
+		}
+	}
+	if got, want := rec.Header().Values("X-End-To-End"), []string{"one", "two"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("X-End-To-End = %v, want %v", got, want)
+	}
+	if got, want := rec.Header().Values("Set-Cookie"), []string{"first=1", "second=2"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Set-Cookie = %v, want %v", got, want)
+	}
+	if got, want := rec.Header().Values("X-Request-ID"), []string{"proxy-request-id"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("X-Request-ID = %v, want %v", got, want)
+	}
+}
+
 func TestProxyHandlerUsesPathRouteBackends(t *testing.T) {
 	apiBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("api-backend"))
