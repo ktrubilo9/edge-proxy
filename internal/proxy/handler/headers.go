@@ -38,6 +38,9 @@ func isUpgradeRequest(header http.Header) bool {
 	return false
 }
 
+// removeHopByHopHeaders removes both known connection-specific fields and
+// fields nominated by Connection. Connection tokens must be collected before
+// the Connection header itself is deleted.
 func removeHopByHopHeaders(header http.Header) {
 	blocked := make(map[string]struct{}, len(hopByHopHeaderNames))
 	for name := range hopByHopHeaderNames {
