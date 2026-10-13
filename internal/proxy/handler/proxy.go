@@ -326,6 +326,14 @@ func doProxyRequest(
 		req.Body = body
 	}
 
+	// ClientIPResolver has already replaced any untrusted forwarding chain with
+	// one resolved address. Preserve that value while filtering client headers.
+	forwardedFor := req.Header.Get("X-Forwarded-For")
+	removeHopByHopHeaders(req.Header)
+	req.Close = false
+	req.TransferEncoding = nil
+	req.Trailer = nil
+
 	req.URL.Scheme = targetURL.Scheme
 	req.URL.Host = targetURL.Host
 	req.RequestURI = ""
@@ -333,10 +341,11 @@ func doProxyRequest(
 	req.Header.Set("X-Request-ID", requestID)
 	req.Header.Set("X-Forwarded-Host", host)
 	req.Header.Set("X-Forwarded-Proto", forwardedProto(original))
-	if req.Header.Get("X-Forwarded-For") == "" {
+	if forwardedFor == "" {
 		ip, _, _ := net.SplitHostPort(original.RemoteAddr)
-		req.Header.Set("X-Forwarded-For", ip)
+		forwardedFor = ip
 	}
+	req.Header.Set("X-Forwarded-For", forwardedFor)
 	if pathRoute != nil && pathRoute.StripPrefix {
 		req.URL.Path = stripRoutePrefix(req.URL.Path, pathRoute.Path)
 		req.URL.RawPath = req.URL.Path
