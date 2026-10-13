@@ -18,7 +18,6 @@ import (
 	"github.com/ktrubilo9/edge-proxy/internal/logger"
 	"github.com/ktrubilo9/edge-proxy/internal/metrics"
 	"github.com/ktrubilo9/edge-proxy/internal/middleware"
-	"github.com/ktrubilo9/edge-proxy/internal/proxy/handler"
 	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
 
 	grpcpkg "google.golang.org/grpc"
@@ -121,35 +120,18 @@ func (p *Proxy) Start() error {
 	p.proxyCollector.Start()
 	p.backendCollector.Start()
 
-	mainHandler := http.HandlerFunc(handler.ProxyHandler(p.Runtime))
-	mw := &middleware.MiddlewareChain{}
-
-	mw.Use(p.clientIPs.Middleware)
-	mw.Use(p.ratelimitMiddleware.Middleware)
-
-	finalHandler := mw.Apply(mainHandler)
-	mux := http.NewServeMux()
-	mux.Handle("/", finalHandler)
-	mux.HandleFunc("/health", handler.PublicHealthHandler(p.Runtime))
-	mux.HandleFunc("/metrics", http.NotFound)
-	mux.HandleFunc("/metrics/prometheus", http.NotFound)
-
 	port := strconv.Itoa(p.Runtime.State().Snapshot.Raw.Server.ProxyPort)
 	p.srv = &http.Server{
 		Addr:              ":" + port,
-		Handler:           mux,
+		Handler:           p.publicHandler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
 
-	opsMux := http.NewServeMux()
-	opsMux.HandleFunc("/health", handler.HealthHandler(p.Runtime))
-	opsMux.HandleFunc("/metrics", handler.MetricsHandler(p.Runtime))
-	opsMux.Handle("/metrics/prometheus", handler.MetricsPrometheusHandler(p.Runtime))
 	p.opsSrv = &http.Server{
 		Addr:              opsAddr,
-		Handler:           opsMux,
+		Handler:           p.operationalHandler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
