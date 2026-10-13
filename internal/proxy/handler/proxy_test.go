@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -22,6 +23,12 @@ import (
 type stubLoadBalancer struct {
 	backend *config.BackendConfig
 	err     error
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
 }
 
 func (s stubLoadBalancer) Next(_ []*config.BackendConfig) (*config.BackendConfig, error) {
@@ -124,6 +131,72 @@ func TestProxyHandlerUnknownHostReturnsForbidden(t *testing.T) {
 	}
 }
 
+func TestProxyHandlerRejectsHTTPUpgradeWithoutContactingBackend(t *testing.T) {
+	var backendRequests atomic.Uint64
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		backendRequests.Add(1)
+		w.WriteHeader(http.StatusSwitchingProtocols)
+	}))
+	defer backend.Close()
+
+	rt := newSingleRouteTestRuntime(t, "app.local", backend.URL, nil)
+
+	tests := []struct {
+		name       string
+		connection []string
+		upgrade    string
+	}{
+		{
+			name:       "websocket",
+			connection: []string{"keep-alive, Upgrade"},
+			upgrade:    "websocket",
+		},
+		{
+			name:       "h2c with multiple connection values",
+			connection: []string{"keep-alive", "uPgRaDe"},
+			upgrade:    "h2c",
+		},
+		{
+			name:    "upgrade header without connection token",
+			upgrade: "websocket",
+		},
+		{
+			name:       "connection token without upgrade header",
+			connection: []string{"upgrade"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "http://app.local/", nil)
+			req.Host = "app.local"
+			for _, value := range tt.connection {
+				req.Header.Add("Connection", value)
+			}
+			if tt.upgrade != "" {
+				req.Header.Set("Upgrade", tt.upgrade)
+			}
+			rec := httptest.NewRecorder()
+
+			ProxyHandler(rt).ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusNotImplemented {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotImplemented)
+			}
+			if body := strings.TrimSpace(rec.Body.String()); body != "HTTP protocol upgrades are not supported" {
+				t.Fatalf("body = %q, want upgrade rejection message", body)
+			}
+			if requestID := rec.Header().Get("X-Request-ID"); requestID == "" {
+				t.Fatal("expected rejected request to keep X-Request-ID")
+			}
+		})
+	}
+
+	if got := backendRequests.Load(); got != 0 {
+		t.Fatalf("backend requests = %d, want 0", got)
+	}
+}
+
 func TestProxyHandlerHandlesLoadBalancerSelectionFailure(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -213,6 +286,197 @@ func TestProxyHandlerRoutesRequestToBackend(t *testing.T) {
 
 	if got := atomic.LoadUint64(&rt.Metrics.TotalRequests); got != 1 {
 		t.Fatalf("total requests = %d, want 1", got)
+	}
+}
+
+func TestProxyHandlerFiltersHopByHopRequestHeaders(t *testing.T) {
+	rt := newSingleRouteTestRuntime(t, "app.local", "http://backend.internal:3000", nil)
+
+	type capturedRequest struct {
+		header           http.Header
+		body             string
+		close            bool
+		transferEncoding []string
+		trailer          http.Header
+		requestURI       string
+	}
+	var captured capturedRequest
+	rt.State().HTTPClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("read upstream request body: %v", err)
+		}
+		captured = capturedRequest{
+			header:           req.Header.Clone(),
+			body:             string(body),
+			close:            req.Close,
+			transferEncoding: append([]string(nil), req.TransferEncoding...),
+			trailer:          req.Trailer.Clone(),
+			requestURI:       req.RequestURI,
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader("backend-ok")),
+			Request:    req,
+		}, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "http://app.local/items", strings.NewReader("payload"))
+	req.Host = "app.local"
+	req.RemoteAddr = "192.0.2.10:4321"
+	req.Header.Set("X-Request-ID", "request-123")
+	req.Header.Set("X-Forwarded-For", "198.51.100.25")
+	req.Header.Set("X-End-To-End", "preserved")
+	req.Header["cOnNeCtIoN"] = []string{
+		"Keep-Alive, X-Temporary-State",
+		"X-Request-ID, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto",
+	}
+	req.Header["kEeP-aLiVe"] = []string{"timeout=5"}
+	req.Header.Set("Proxy-Authenticate", "Basic")
+	req.Header.Set("Proxy-Authorization", "Basic credentials")
+	req.Header.Set("Proxy-Connection", "keep-alive")
+	req.Header.Set("TE", "trailers")
+	req.Header.Set("Trailer", "X-Request-Trailer")
+	req.Header.Set("Transfer-Encoding", "chunked")
+	req.Header.Set("X-Temporary-State", "remove-me")
+	req.Close = true
+	req.TransferEncoding = []string{"chunked"}
+	req.Trailer = http.Header{"X-Request-Trailer": {"checksum"}}
+
+	originalHeader := req.Header.Clone()
+	originalTransferEncoding := append([]string(nil), req.TransferEncoding...)
+	originalTrailer := req.Trailer.Clone()
+	rec := httptest.NewRecorder()
+
+	ProxyHandler(rt).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	for _, name := range []string{
+		"Connection",
+		"Keep-Alive",
+		"Proxy-Authenticate",
+		"Proxy-Authorization",
+		"Proxy-Connection",
+		"TE",
+		"Trailer",
+		"Transfer-Encoding",
+		"Upgrade",
+		"X-Temporary-State",
+	} {
+		if headerContains(captured.header, name) {
+			t.Errorf("upstream request contains hop-by-hop header %q: %v", name, captured.header)
+		}
+	}
+	if got := captured.header.Get("X-End-To-End"); got != "preserved" {
+		t.Errorf("X-End-To-End = %q, want preserved", got)
+	}
+	for name, want := range map[string]string{
+		"X-Request-ID":      "request-123",
+		"X-Forwarded-For":   "198.51.100.25",
+		"X-Forwarded-Host":  "app.local",
+		"X-Forwarded-Proto": "http",
+	} {
+		if got := captured.header.Get(name); got != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
+	}
+	if captured.body != "payload" {
+		t.Errorf("upstream body = %q, want payload", captured.body)
+	}
+	if captured.close {
+		t.Error("upstream request kept Close=true")
+	}
+	if len(captured.transferEncoding) != 0 {
+		t.Errorf("upstream TransferEncoding = %v, want none", captured.transferEncoding)
+	}
+	if len(captured.trailer) != 0 {
+		t.Errorf("upstream Trailer = %v, want none", captured.trailer)
+	}
+	if captured.requestURI != "" {
+		t.Errorf("upstream RequestURI = %q, want empty", captured.requestURI)
+	}
+
+	if !reflect.DeepEqual(req.Header, originalHeader) {
+		t.Errorf("original headers changed:\ngot  %v\nwant %v", req.Header, originalHeader)
+	}
+	if !req.Close {
+		t.Error("original request Close was changed")
+	}
+	if !reflect.DeepEqual(req.TransferEncoding, originalTransferEncoding) {
+		t.Errorf("original TransferEncoding = %v, want %v", req.TransferEncoding, originalTransferEncoding)
+	}
+	if !reflect.DeepEqual(req.Trailer, originalTrailer) {
+		t.Errorf("original Trailer = %v, want %v", req.Trailer, originalTrailer)
+	}
+}
+
+func TestProxyHandlerFiltersHopByHopResponseHeaders(t *testing.T) {
+	rt := newSingleRouteTestRuntime(t, "app.local", "http://backend.internal:3000", nil)
+	rt.State().HTTPClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusCreated,
+			Header: http.Header{
+				"cOnNeCtIoN":          {"Keep-Alive, X-Backend-State", "X-Request-ID"},
+				"kEeP-aLiVe":          {"timeout=5"},
+				"Proxy-Authenticate":  {"Basic"},
+				"Proxy-Authorization": {"Basic credentials"},
+				"Proxy-Connection":    {"keep-alive"},
+				"Te":                  {"trailers"},
+				"Trailer":             {"X-Response-Trailer"},
+				"Transfer-Encoding":   {"chunked"},
+				"Upgrade":             {"websocket"},
+				"X-Backend-State":     {"temporary"},
+				"X-Request-ID":        {"backend-request-id"},
+				"X-End-To-End":        {"one", "two"},
+				"Set-Cookie":          {"first=1", "second=2"},
+			},
+			Body:    io.NopCloser(strings.NewReader("created")),
+			Trailer: http.Header{"X-Response-Trailer": {"checksum"}},
+			Request: req,
+		}, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "http://app.local/items", nil)
+	req.Host = "app.local"
+	req.Header.Set("X-Request-ID", "proxy-request-id")
+	rec := httptest.NewRecorder()
+
+	ProxyHandler(rt).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if body := strings.TrimSpace(rec.Body.String()); body != "created" {
+		t.Fatalf("body = %q, want created", body)
+	}
+	for _, name := range []string{
+		"Connection",
+		"Keep-Alive",
+		"Proxy-Authenticate",
+		"Proxy-Authorization",
+		"Proxy-Connection",
+		"TE",
+		"Trailer",
+		"Transfer-Encoding",
+		"Upgrade",
+		"X-Backend-State",
+		"X-Response-Trailer",
+	} {
+		if headerContains(rec.Header(), name) {
+			t.Errorf("downstream response contains hop-by-hop header %q: %v", name, rec.Header())
+		}
+	}
+	if got, want := rec.Header().Values("X-End-To-End"), []string{"one", "two"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("X-End-To-End = %v, want %v", got, want)
+	}
+	if got, want := rec.Header().Values("Set-Cookie"), []string{"first=1", "second=2"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Set-Cookie = %v, want %v", got, want)
+	}
+	if got, want := rec.Header().Values("X-Request-ID"), []string{"proxy-request-id"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("X-Request-ID = %v, want %v", got, want)
 	}
 }
 

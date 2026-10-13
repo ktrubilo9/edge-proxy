@@ -85,6 +85,17 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 			http.Error(w, responseMsg, statusCode)
 		}
 
+		if isUpgradeRequest(r.Header) {
+			logAndReturn(
+				http.StatusNotImplemented,
+				"HTTP protocol upgrades are not supported",
+				"",
+				nil,
+				nil,
+			)
+			return
+		}
+
 		if vhost == nil || len(targetBackends) == 0 {
 			logAndReturn(http.StatusForbidden, "Unknown host", "", nil, nil)
 			return
@@ -164,6 +175,9 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 		}()
 		state.Metrics.HTTP.RecordStatusCode(resp.StatusCode)
 
+		// Filter only the upstream header map before copying it. The response
+		// writer already contains proxy-owned headers such as X-Request-ID.
+		removeHopByHopHeaders(resp.Header)
 		for k, v := range resp.Header {
 			for _, vv := range v {
 				w.Header().Add(k, vv)
@@ -315,6 +329,16 @@ func doProxyRequest(
 		req.Body = body
 	}
 
+	// ClientIPResolver has already replaced any untrusted forwarding chain with
+	// one resolved address. Preserve that value while filtering client headers.
+	forwardedFor := req.Header.Get("X-Forwarded-For")
+	removeHopByHopHeaders(req.Header)
+	// Request.Clone also copies connection framing stored outside Header.
+	// Reset it so the upstream transport chooses framing for its own connection.
+	req.Close = false
+	req.TransferEncoding = nil
+	req.Trailer = nil
+
 	req.URL.Scheme = targetURL.Scheme
 	req.URL.Host = targetURL.Host
 	req.RequestURI = ""
@@ -322,10 +346,11 @@ func doProxyRequest(
 	req.Header.Set("X-Request-ID", requestID)
 	req.Header.Set("X-Forwarded-Host", host)
 	req.Header.Set("X-Forwarded-Proto", forwardedProto(original))
-	if req.Header.Get("X-Forwarded-For") == "" {
+	if forwardedFor == "" {
 		ip, _, _ := net.SplitHostPort(original.RemoteAddr)
-		req.Header.Set("X-Forwarded-For", ip)
+		forwardedFor = ip
 	}
+	req.Header.Set("X-Forwarded-For", forwardedFor)
 	if pathRoute != nil && pathRoute.StripPrefix {
 		req.URL.Path = stripRoutePrefix(req.URL.Path, pathRoute.Path)
 		req.URL.RawPath = req.URL.Path
