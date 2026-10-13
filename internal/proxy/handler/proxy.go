@@ -85,6 +85,17 @@ func ProxyHandler(state *runtime.Runtime) http.HandlerFunc {
 			http.Error(w, responseMsg, statusCode)
 		}
 
+		if isUpgradeRequest(r.Header) {
+			logAndReturn(
+				http.StatusNotImplemented,
+				"HTTP protocol upgrades are not supported",
+				"",
+				nil,
+				nil,
+			)
+			return
+		}
+
 		if vhost == nil || len(targetBackends) == 0 {
 			logAndReturn(http.StatusForbidden, "Unknown host", "", nil, nil)
 			return

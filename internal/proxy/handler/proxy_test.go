@@ -124,6 +124,72 @@ func TestProxyHandlerUnknownHostReturnsForbidden(t *testing.T) {
 	}
 }
 
+func TestProxyHandlerRejectsHTTPUpgradeWithoutContactingBackend(t *testing.T) {
+	var backendRequests atomic.Uint64
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		backendRequests.Add(1)
+		w.WriteHeader(http.StatusSwitchingProtocols)
+	}))
+	defer backend.Close()
+
+	rt := newSingleRouteTestRuntime(t, "app.local", backend.URL, nil)
+
+	tests := []struct {
+		name       string
+		connection []string
+		upgrade    string
+	}{
+		{
+			name:       "websocket",
+			connection: []string{"keep-alive, Upgrade"},
+			upgrade:    "websocket",
+		},
+		{
+			name:       "h2c with multiple connection values",
+			connection: []string{"keep-alive", "uPgRaDe"},
+			upgrade:    "h2c",
+		},
+		{
+			name:    "upgrade header without connection token",
+			upgrade: "websocket",
+		},
+		{
+			name:       "connection token without upgrade header",
+			connection: []string{"upgrade"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "http://app.local/", nil)
+			req.Host = "app.local"
+			for _, value := range tt.connection {
+				req.Header.Add("Connection", value)
+			}
+			if tt.upgrade != "" {
+				req.Header.Set("Upgrade", tt.upgrade)
+			}
+			rec := httptest.NewRecorder()
+
+			ProxyHandler(rt).ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusNotImplemented {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotImplemented)
+			}
+			if body := strings.TrimSpace(rec.Body.String()); body != "HTTP protocol upgrades are not supported" {
+				t.Fatalf("body = %q, want upgrade rejection message", body)
+			}
+			if requestID := rec.Header().Get("X-Request-ID"); requestID == "" {
+				t.Fatal("expected rejected request to keep X-Request-ID")
+			}
+		})
+	}
+
+	if got := backendRequests.Load(); got != 0 {
+		t.Fatalf("backend requests = %d, want 0", got)
+	}
+}
+
 func TestProxyHandlerHandlesLoadBalancerSelectionFailure(t *testing.T) {
 	tests := []struct {
 		name       string
