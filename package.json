@@ -11,6 +11,6 @@
     "docs:build": "sourcey build -o dist"
   },
   "devDependencies": {
-    "sourcey": "3.6.5"
+    "sourcey": "3.9.2"
   }
 }
