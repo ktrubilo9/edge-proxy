@@ -27,21 +27,21 @@ func (s *AdminGRPCServer) GetVirtualHost(ctx context.Context, req *adminpb.GetVi
 
 func (s *AdminGRPCServer) AddVirtualHost(ctx context.Context, req *adminpb.AddVirtualHostRequest) (*adminpb.BasicResponse, error) {
 	if err := s.Runtime.AddVirtualHost(VhostFromPB(req.VirtualHost)); err != nil {
-		return fail(err.Error()), nil
+		return resourceMutationFailure(err)
 	}
 	return success("Virtual host added"), nil
 }
 
 func (s *AdminGRPCServer) RemoveVirtualHost(ctx context.Context, req *adminpb.RemoveVirtualHostRequest) (*adminpb.BasicResponse, error) {
 	if err := s.Runtime.RemoveVirtualHost(req.Domain); err != nil {
-		return fail(err.Error()), nil
+		return resourceMutationFailure(err)
 	}
 	return success("Virtual host removed"), nil
 }
 
 func (s *AdminGRPCServer) UpdateVirtualHost(ctx context.Context, req *adminpb.UpdateVirtualHostRequest) (*adminpb.BasicResponse, error) {
 	if err := s.Runtime.UpdateVirtualHost(req.Domain, VhostFromPB(req.VirtualHost)); err != nil {
-		return fail(err.Error()), nil
+		return resourceMutationFailure(err)
 	}
 	return success("Virtual host updated"), nil
 }

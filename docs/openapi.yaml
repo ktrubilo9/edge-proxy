@@ -97,6 +97,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/ResourceConflict"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
         "500":
@@ -122,8 +124,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Backend"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ResourceNotFound"
         "500":
           $ref: "#/components/responses/InternalError"
     put:
@@ -157,6 +163,10 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ResourceNotFound"
+        "409":
+          $ref: "#/components/responses/ResourceConflict"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
         "500":
@@ -175,8 +185,12 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/MutationSucceeded"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ResourceNotFound"
         "500":
           $ref: "#/components/responses/InternalError"
   /api/vhost:
@@ -237,6 +251,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/ResourceConflict"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
         "500":
@@ -262,8 +278,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VirtualHostRead"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ResourceNotFound"
         "500":
           $ref: "#/components/responses/InternalError"
     put:
@@ -299,6 +319,10 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ResourceNotFound"
+        "409":
+          $ref: "#/components/responses/ResourceConflict"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
         "500":
@@ -317,8 +341,12 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/MutationSucceeded"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ResourceNotFound"
         "500":
           $ref: "#/components/responses/InternalError"
   /api/vhost/{domain}/security:
@@ -590,12 +618,24 @@ components:
             success: true
             message: Configuration updated successfully
     BadRequest:
-      description: The request body is not valid JSON or a required path value is missing.
+      description: The JSON body or a path value is missing, malformed, or fails validation.
       content:
         text/plain:
           schema:
             type: string
           example: "Invalid request body: unexpected EOF\n"
+    ResourceNotFound:
+      description: The requested backend or virtual host does not exist.
+      content:
+        text/plain:
+          schema:
+            type: string
+    ResourceConflict:
+      description: The requested change conflicts with an existing backend or virtual host.
+      content:
+        text/plain:
+          schema:
+            type: string
     Unauthorized:
       description: Bearer authentication is enabled and the token is missing or invalid.
       headers:
@@ -620,7 +660,7 @@ components:
         text/plain:
           schema:
             type: string
-          example: "Failed to update backend: backend does not exist in config: backend-1\n"
+          example: "Failed to update backend: could not persist configuration\n"
   schemas:
     BasicResponse:
       type: object

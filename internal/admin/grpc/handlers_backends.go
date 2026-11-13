@@ -25,7 +25,7 @@ func (s *AdminGRPCServer) AddBackend(ctx context.Context, req *adminpb.AddBacken
 		Weight:  req.Weight,
 		Enabled: req.Enabled,
 	}); err != nil {
-		return fail(err.Error()), nil
+		return resourceMutationFailure(err)
 	}
 	return success("Backend added successfully"), nil
 }
@@ -38,7 +38,7 @@ func (s *AdminGRPCServer) UpdateBackend(ctx context.Context, req *adminpb.Update
 		return fail("weight must be positive"), nil
 	}
 	if err := s.Runtime.UpdateBackend(req.Id, req.Url, req.Weight, req.Enabled); err != nil {
-		return fail(err.Error()), nil
+		return resourceMutationFailure(err)
 	}
 	return success("Backend updated successfully"), nil
 }
@@ -48,7 +48,7 @@ func (s *AdminGRPCServer) RemoveBackend(ctx context.Context, req *adminpb.Remove
 		return fail("id cannot be empty"), nil
 	}
 	if err := s.Runtime.RemoveBackend(req.Id); err != nil {
-		return fail(err.Error()), nil
+		return resourceMutationFailure(err)
 	}
 	return success("Backend removed successfully"), nil
 }
@@ -63,9 +63,12 @@ func (s *AdminGRPCServer) GetBackends(ctx context.Context, _ *adminpb.Empty) (*a
 }
 
 func (s *AdminGRPCServer) GetBackend(ctx context.Context, req *adminpb.GetBackendRequest) (*adminpb.BackendResponse, error) {
+	if req.Id == "" {
+		return nil, status.Error(codes.InvalidArgument, "id cannot be empty")
+	}
 	backend := s.Runtime.GetBackendResponse(req.Id)
 	if backend == nil {
-		return nil, status.Error(codes.InvalidArgument, "id does not exists")
+		return nil, status.Error(codes.NotFound, "backend not found")
 	}
 	resp := &adminpb.BackendResponse{
 		Id:         backend.Id,

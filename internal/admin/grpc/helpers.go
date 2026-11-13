@@ -1,15 +1,26 @@
 package grpc
 
 import (
+	"errors"
+
 	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
 	"github.com/ktrubilo9/edge-proxy/internal/config"
 	"github.com/ktrubilo9/edge-proxy/internal/proxy/runtime"
 	"github.com/ktrubilo9/edge-proxy/internal/view"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type AdminGRPCServer struct {
 	adminpb.UnimplementedProxyAdminServer
 	Runtime *runtime.Runtime
+}
+
+func resourceMutationFailure(err error) (*adminpb.BasicResponse, error) {
+	if errors.Is(err, config.ErrPersistence) {
+		return nil, status.Error(codes.Internal, config.ErrPersistence.Error())
+	}
+	return fail(err.Error()), nil
 }
 
 func backendToPB(b view.BackendResponse) *adminpb.BackendResponse {
