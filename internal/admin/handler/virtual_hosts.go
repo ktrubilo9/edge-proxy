@@ -3,9 +3,10 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
 	"net/http"
 	"time"
+
+	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
 )
 
 func HandleVhostsList(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
@@ -17,10 +18,14 @@ func HandleVhostsList(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 
 		resp, err := proxyClient.GetVirtualHosts(ctx, &adminpb.Empty{})
 		if err != nil {
-			http.Error(w, "Failed to get virtual hosts: "+err.Error(), http.StatusInternalServerError)
+			respondAdminRPCError(w, "Failed to get virtual hosts", err)
 			return
 		}
-		respondJSON(w, resp.VirtualHosts)
+		items := resp.VirtualHosts
+		if items == nil {
+			items = []*adminpb.VirtualHost{}
+		}
+		respondJSON(w, items)
 	}
 }
 
@@ -39,7 +44,7 @@ func HandleVhostGet(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 		req := &adminpb.GetVirtualHostRequest{Domain: domain}
 		resp, err := proxyClient.GetVirtualHost(ctx, req)
 		if err != nil {
-			http.Error(w, "Failed to get virtual host: "+err.Error(), http.StatusInternalServerError)
+			respondAdminRPCError(w, "Failed to get virtual host", err)
 			return
 		}
 		respondJSON(w, resp)
@@ -53,14 +58,14 @@ func HandleVhostAdd(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 		logRequest(r)
 
 		var req adminpb.AddVirtualHostRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		if err := decodeAdminJSON(r.Body, &req); err != nil {
+			respondAdminJSONError(w, err)
 			return
 		}
 
 		resp, err := proxyClient.AddVirtualHost(ctx, &req)
 		if err != nil {
-			http.Error(w, "Failed to add virtual host: "+err.Error(), http.StatusInternalServerError)
+			respondAdminRPCError(w, "Failed to add virtual host", err)
 			return
 		}
 		if !resp.Success {
@@ -85,15 +90,15 @@ func HandleVhostUpdate(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 		logRequest(r)
 
 		var req adminpb.UpdateVirtualHostRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		if err := decodeAdminJSON(r.Body, &req); err != nil {
+			respondAdminJSONError(w, err)
 			return
 		}
 		req.Domain = domain
 
 		resp, err := proxyClient.UpdateVirtualHost(ctx, &req)
 		if err != nil {
-			http.Error(w, "Failed to update virtual host: "+err.Error(), http.StatusInternalServerError)
+			respondAdminRPCError(w, "Failed to update virtual host", err)
 			return
 		}
 		if !resp.Success {
@@ -120,7 +125,7 @@ func HandleVhostDelete(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 		req := &adminpb.RemoveVirtualHostRequest{Domain: domain}
 		resp, err := proxyClient.RemoveVirtualHost(ctx, req)
 		if err != nil {
-			http.Error(w, "Failed to remove virtual host: "+err.Error(), http.StatusInternalServerError)
+			respondAdminRPCError(w, "Failed to remove virtual host", err)
 			return
 		}
 		if !resp.Success {

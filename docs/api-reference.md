@@ -56,11 +56,13 @@ codes, and ready-to-adapt cURL, Go, JavaScript, and Python requests.
 - Successful operations return JSON with status `200`. Collection endpoints
   return raw arrays rather than protobuf wrapper objects.
 - Invalid JSON returns plain text with status `400`.
+- Backend and virtual-host operations also return plain text for validation
+  errors (`400`), missing resources (`404`), and conflicts (`409`).
 - Missing or invalid bearer credentials return `401` and a
   `WWW-Authenticate` header.
 - Request bodies are limited to 1 MiB; oversized bodies return `413`.
-- Current gRPC, validation, persistence, and missing-resource failures surface
-  as plain-text `500` responses.
+- Backend and virtual-host operations return plain text with status `500`
+  when the control plane fails or cannot persist a configuration change.
 - CORS preflight requests return `204` before authentication. The default
   allowed origin is `http://localhost:3000` and can be changed with
   `ADMIN_ALLOWED_ORIGIN`.

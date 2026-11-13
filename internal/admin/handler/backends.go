@@ -2,10 +2,10 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
 	"net/http"
 	"time"
+
+	"github.com/ktrubilo9/edge-proxy/internal/api/adminpb"
 )
 
 func HandleBackendsList(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
@@ -16,10 +16,14 @@ func HandleBackendsList(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 
 		resp, err := proxyClient.GetBackends(ctx, &adminpb.Empty{})
 		if err != nil {
-			http.Error(w, "Failed to get backends: "+err.Error(), http.StatusInternalServerError)
+			respondAdminRPCError(w, "Failed to get backends", err)
 			return
 		}
-		respondJSON(w, resp.Backends)
+		items := resp.Backends
+		if items == nil {
+			items = []*adminpb.BackendResponse{}
+		}
+		respondJSON(w, items)
 	}
 }
 
@@ -38,7 +42,7 @@ func HandleBackendGet(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 		req := &adminpb.GetBackendRequest{Id: id}
 		resp, err := proxyClient.GetBackend(ctx, req)
 		if err != nil {
-			http.Error(w, "Failed to get backend: "+err.Error(), http.StatusInternalServerError)
+			respondAdminRPCError(w, "Failed to get backend", err)
 			return
 		}
 		respondJSON(w, resp)
@@ -52,14 +56,14 @@ func HandleBackendAdd(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc {
 		logRequest(r)
 
 		var req adminpb.AddBackendRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		if err := decodeAdminJSON(r.Body, &req); err != nil {
+			respondAdminJSONError(w, err)
 			return
 		}
 
 		resp, err := proxyClient.AddBackend(ctx, &req)
 		if err != nil {
-			http.Error(w, "Failed to add backend: "+err.Error(), http.StatusInternalServerError)
+			respondAdminRPCError(w, "Failed to add backend", err)
 			return
 		}
 		if !resp.Success {
@@ -84,15 +88,15 @@ func HandleBackendUpdate(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc 
 		logRequest(r)
 
 		var req adminpb.UpdateBackendRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		if err := decodeAdminJSON(r.Body, &req); err != nil {
+			respondAdminJSONError(w, err)
 			return
 		}
 		req.Id = id
 
 		resp, err := proxyClient.UpdateBackend(ctx, &req)
 		if err != nil {
-			http.Error(w, "Failed to update backend: "+err.Error(), http.StatusInternalServerError)
+			respondAdminRPCError(w, "Failed to update backend", err)
 			return
 		}
 		if !resp.Success {
@@ -119,7 +123,7 @@ func HandleBackendDelete(proxyClient adminpb.ProxyAdminClient) http.HandlerFunc 
 		req := &adminpb.RemoveBackendRequest{Id: id}
 		resp, err := proxyClient.RemoveBackend(ctx, req)
 		if err != nil {
-			http.Error(w, "Failed to remove backend: "+err.Error(), http.StatusInternalServerError)
+			respondAdminRPCError(w, "Failed to remove backend", err)
 			return
 		}
 		if !resp.Success {

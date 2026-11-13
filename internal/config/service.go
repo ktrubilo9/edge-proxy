@@ -6,6 +6,9 @@ import (
 	"sync"
 )
 
+// ErrPersistence indicates that a validated configuration could not be saved.
+var ErrPersistence = errors.New("could not persist configuration")
+
 type Service struct {
 	mu       sync.RWMutex
 	path     string
@@ -285,7 +288,7 @@ func (s *Service) applyLocked(next *FullConfig) error {
 		return err
 	}
 	if err := SaveConfig(s.path, next); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", ErrPersistence, err)
 	}
 
 	s.current = next
